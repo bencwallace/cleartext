@@ -19,27 +19,27 @@ class WikiSL(TranslationDataset):
     @classmethod
     def splits(cls, fields, **kwargs):
         exts = ('.src', '.dst')
-        root = os.path.join(PROJ_ROOT, 'data/raw/')
+        root = PROJ_ROOT / 'data/raw/'
 
         train = cls.prefix + '.train'
         valid = cls.prefix + '.valid'
         test = cls.prefix + '.test'
 
         # download if necessary
-        check = os.path.join(root, 'data-simplification')
+        check = root / 'data-simplification'
         cls.download(root, check=check)
 
         # extract if necessary
-        if not os.path.isdir(check):
+        if not check.is_dir():
             url = cls.urls[0]
             path = root
             filename = os.path.basename(url)
-            zpath = os.path.join(path, filename)
+            zpath = path / filename
             with tarfile.open(zpath, 'r:bz2') as tar:
                 dirs = [member for member in tar.getmembers()]
                 tar.extractall(path=root, members=dirs)
 
-        path = os.path.join(check, cls.name2)
+        path = check / cls.dir_name
         return super().splits(exts, fields, path=path, root=root, train=train, validation=valid, test=test, **kwargs)
 
     # needed in order to limit number of examples
@@ -47,7 +47,7 @@ class WikiSL(TranslationDataset):
         if not isinstance(fields[0], (tuple, list)):
             fields = [('src', fields[0]), ('trg', fields[1])]
 
-        src_path, trg_path = tuple(os.path.expanduser(path + x) for x in exts)
+        src_path, trg_path = tuple(path + x for x in exts)
 
         max_examples = kwargs.get('max_examples')
         examples = []
@@ -67,13 +67,13 @@ class WikiSL(TranslationDataset):
 
 class WikiSmall(WikiSL):
     name = ''
-    name2 = 'wikismall'     # kludge
+    dir_name = 'wikismall'     # kludge
     dirname = ''
     prefix = 'PWKP_108016.tag.80.aner.ori'
 
 
 class WikiLarge(WikiSL):
     name = ''
-    name2 = 'wikilarge'
+    dir_name = 'wikilarge'
     dirname = ''
     prefix = 'wiki.full.aner.ori'
