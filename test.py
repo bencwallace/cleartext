@@ -51,7 +51,7 @@ if __name__ == '__main__':
 
     print('Building model')
     # model = build_model(device, TARGET.vocab.vectors)
-    model = EncoderDecoder(device, SOURCE.vocab.vectors, TARGET.vocab.vectors, 100, 50, 0.2)
+    model = EncoderDecoder(device, SOURCE.vocab.vectors, TARGET.vocab.vectors, 100, 50, 0.2).to(device)
     model.apply(init_weights)
     optimizer = optim.Adam(model.parameters())
     criterion = nn.CrossEntropyLoss(ignore_index=TARGET.vocab.stoi[PAD_TOKEN])
