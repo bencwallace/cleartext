@@ -49,13 +49,13 @@ class WikiSL(TranslationDataset):
 
         src_path, trg_path = tuple(os.path.expanduser(path + x) for x in exts)
 
-        num_examples = kwargs.get('num_examples')
+        max_examples = kwargs.get('max_examples')
         examples = []
         with io.open(src_path, mode='r', encoding='utf-8') as src_file, \
                 io.open(trg_path, mode='r', encoding='utf-8') as trg_file:
             for i, line in enumerate(zip(src_file, trg_file)):
                 src_line, trg_line = line
-                if i == num_examples:
+                if i == max_examples:
                     break
                 src_line, trg_line = src_line.strip(), trg_line.strip()
                 if src_line != '' and trg_line != '':

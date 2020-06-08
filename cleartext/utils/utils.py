@@ -1,4 +1,3 @@
-import spacy
 from pathlib import Path
 
 import torch
