@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import click
 import math
 import time
@@ -27,7 +28,7 @@ CLIP = 1
 
 
 @click.command()
-@click.option('--num_epochs', '-e', default=1, type=int, help='Number of epochs')
+@click.option('--num_epochs', '-e', default=10, type=int, help='Number of epochs')
 @click.option('--max_examples', '-n', default=50_000, type=int, help='Max number of training examples')
 @click.option('--embed_dim', '-d', default='50', type=Choice(['50', '100', '200', '300']), help='Embedding dimension')
 @click.option('--src_vocab', '-s', default=5_000, type=int, help='Max source vocabulary size')
