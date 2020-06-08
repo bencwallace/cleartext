@@ -5,11 +5,10 @@ import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
-
 from torchtext.data import Field, BucketIterator
 
+import cleartext.utils as utils
 from cleartext.data import WikiSmall
-from cleartext.utils import format_time, train_step, eval_step, count_parameters, init_weights, get_proj_root, sample, seq_to_sentence
 from cleartext.models import EncoderDecoder
 
 
@@ -53,14 +52,15 @@ if __name__ == '__main__':
                   'init_token': SOS_TOKEN,
                   'eos_token': EOS_TOKEN,
                   'lower': True,
-                  'pad_token': PAD_TOKEN}
+                  'pad_token': PAD_TOKEN,
+                  'preprocessing': utils.preprocess}
     FIELD = Field(**field_args)
     train_data, valid_data, test_data = data = WikiSmall.splits(fields=(FIELD, FIELD), max_examples=max_examples)
     print(f'Loaded {len(train_data)} training examples')
 
     # load embeddings and prepare data
     print(f'Loading {embed_dim}-dimensional GloVe vectors')
-    proj_root = get_proj_root()
+    proj_root = utils.get_proj_root()
     vectors_path = proj_root / '.vector_cache'
     embed_vectors = f'glove.6B.{embed_dim}d'
     # todo: fix error when actual vocabulary loaded is less than max size
@@ -72,34 +72,34 @@ if __name__ == '__main__':
 
     print('Building model')
     model = EncoderDecoder(device, FIELD.vocab.vectors, FIELD.vocab.vectors, RNN_UNITS, ATTN_UNITS, DROPOUT).to(device)
-    model.apply(init_weights)
+    model.apply(utils.init_weights)
 
     optimizer = optim.Adam(model.parameters())
     criterion = nn.CrossEntropyLoss(ignore_index=FIELD.vocab.stoi[PAD_TOKEN])
-    trainable, total = count_parameters(model)
+    trainable, total = utils.count_parameters(model)
     print(f'Trainable parameters: {trainable} | Total parameters: {total}')
 
     print(f'Training model for {num_epochs} epochs')
     best_valid_loss = float('inf')
     for epoch in range(num_epochs):
         start_time = time.time()
-        train_loss = train_step(model, train_iter, criterion, optimizer, verbose=verbose)
-        valid_loss = eval_step(model, valid_iter, criterion)
+        train_loss = utils.train_step(model, train_iter, criterion, optimizer, verbose=verbose)
+        valid_loss = utils.eval_step(model, valid_iter, criterion)
         end_time = time.time()
 
-        epoch_mins, epoch_secs = format_time(start_time, end_time)
+        epoch_mins, epoch_secs = utils.format_time(start_time, end_time)
         print(f'Epoch: {epoch+1:02} | Time: {epoch_mins}m {epoch_secs}s')
         print(f'\tTraining loss: {train_loss:.3f}\t| Training perplexity: {math.exp(train_loss):7.3f}')
         print(f'\tValidation Loss: {valid_loss:.3f}\t| Validation perplexity: {math.exp(valid_loss):7.3f}')
 
     print('Testing model')
-    test_loss = eval_step(model, test_iter, criterion)
+    test_loss = utils.eval_step(model, test_iter, criterion)
     print(f'Test loss: {test_loss:.3f} | Test perplexity: {math.exp(test_loss):7.3f}')
 
     print('Model sample')
-    source, output, target = sample(model, test_iter)
+    source, output, target = utils.sample(model, test_iter)
     for i in torch.randint(0, len(source), (NUM_SAMPLES,)):
-        print('> ', seq_to_sentence(source.T[i].tolist(), FIELD.vocab, PAD_TOKEN))
-        print('= ', seq_to_sentence(target.T[i].tolist(), FIELD.vocab, PAD_TOKEN))
-        print('< ', seq_to_sentence(output.T[i].tolist(), FIELD.vocab, PAD_TOKEN))
+        print('> ', utils.seq_to_sentence(source.T[i].tolist(), FIELD.vocab, PAD_TOKEN))
+        print('= ', utils.seq_to_sentence(target.T[i].tolist(), FIELD.vocab, PAD_TOKEN))
+        print('< ', utils.seq_to_sentence(output.T[i].tolist(), FIELD.vocab, PAD_TOKEN))
         print()

@@ -1,4 +1,6 @@
 from pathlib import Path
+import re
+import unicodedata
 
 from torch import nn as nn
 
@@ -33,3 +35,15 @@ def seq_to_sentence(seq, vocab, pad_token):
         s = vocab.itos[i]
         return '' if s == pad_token else s
     return ' '.join(list(map(itos, seq)))
+
+
+def preprocess_string(s):
+    s = s.lower().strip()
+    s = ''.join(c for c in unicodedata.normalize('NFD', s)
+                if unicodedata.category(c) != 'Mn')
+    s = re.sub(r'[^a-zA-Z.!?]+', r' ', s)
+    return s
+
+
+def preprocess(strings):
+    return list(map(preprocess_string, strings))
