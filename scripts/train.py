@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 import click
 import math
+import signal
+import sys
 import time
 from click import Choice
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torchtext.data import Field, BucketIterator
+from torch.nn import Module
+from torchtext.data import BucketIterator, Field, Iterator
 
 import cleartext.utils as utils
 from cleartext.data import WikiSmall
@@ -31,7 +34,6 @@ CLIP = 1
 @click.option('--num_epochs', '-e', default=10, type=int, help='Number of epochs')
 @click.option('--max_examples', '-n', default=50_000, type=int, help='Max number of training examples')
 @click.option('--embed_dim', '-d', default='50', type=Choice(['50', '100', '200', '300']), help='Embedding dimension')
-# @click.option('--src_vocab', '-s', default=5_000, type=int, help='Max source vocabulary size')
 @click.option('--trg_vocab', '-t', default=2_000, type=int, help='Max target vocabulary size')
 @click.option('--rnn_units', '-r', default=100, type=int, help='Number of RNN units')
 @click.option('--attn_units', '-a', default=100, type=int, help='Number of attention units')
@@ -50,10 +52,10 @@ def main(num_epochs: int, max_examples: int,
         'init_token': SOS_TOKEN, 'eos_token': EOS_TOKEN, 'pad_token': PAD_TOKEN, 'unk_token': UNK_TOKEN,
         'lower': True, 'preprocessing': utils.preprocess
     }
-    SRC = Field(**field_args)
-    TRG = Field(**field_args)
+    src = Field(**field_args)
+    trg = Field(**field_args)
 
-    train_data, valid_data, test_data = WikiSmall.splits(fields=(SRC, TRG), max_examples=max_examples)
+    train_data, valid_data, test_data = WikiSmall.splits(fields=(src, trg), max_examples=max_examples)
     print(f'Loaded {len(train_data)} training examples')
 
     # load embeddings
@@ -63,29 +65,34 @@ def main(num_epochs: int, max_examples: int,
     glove = f'glove.6B.{embed_dim}d'
     # todo: fix error when actual vocabulary loaded is less than max size
     vocab_args = {'min_freq': MIN_FREQ, 'vectors': glove, 'vectors_cache': vectors_path}
-    SRC.build_vocab(train_data, **vocab_args)
-    TRG.build_vocab(train_data, max_size=trg_vocab, **vocab_args)
+    src.build_vocab(train_data, **vocab_args)
+    trg.build_vocab(train_data, max_size=trg_vocab, **vocab_args)
 
     # prepare data
     iters = BucketIterator.splits((train_data, valid_data, test_data), batch_size=BATCH_SIZE, device=device)
     train_iter, valid_iter, test_iter = iters
-    print(f'Source vocabulary size: {len(SRC.vocab)}')
-    print(f'Target vocabulary size: {len(TRG.vocab)}')
+    print(f'Source vocabulary size: {len(src.vocab)}')
+    print(f'Target vocabulary size: {len(trg.vocab)}')
 
     # build model
     print('Building model')
-    model = EncoderDecoder(device, SRC.vocab.vectors, TRG.vocab.vectors, rnn_units, attn_units, dropout).to(device)
+    model = EncoderDecoder(device, src.vocab.vectors, trg.vocab.vectors, rnn_units, attn_units, dropout).to(device)
     model.apply(utils.init_weights)
     trainable, total = utils.count_parameters(model)
     print(f'Trainable parameters: {trainable} | Total parameters: {total}')
 
     # prepare optimizer and loss
     optimizer = optim.Adam(model.parameters())
-    criterion = nn.CrossEntropyLoss(ignore_index=TRG.vocab.stoi[PAD_TOKEN])
+    criterion = nn.CrossEntropyLoss(ignore_index=trg.vocab.stoi[PAD_TOKEN])
 
-    # start training cycle
+    # define register signal handler
+    def signal_handler(sig, frame):
+        test_and_sample(model, src, trg, test_iter, criterion)
+    signal.signal(signal.SIGINT, signal_handler)
+
+    # start training cycle -- todo: update and use checkpoints
     print(f'Training model for {num_epochs} epochs')
-    best_valid_loss = float('inf')  # todo: update and use checkpoints
+    best_valid_loss = float('inf')
     for epoch in range(num_epochs):
         start_time = time.time()
         train_loss = utils.train_step(model, train_iter, criterion, optimizer)
@@ -98,7 +105,12 @@ def main(num_epochs: int, max_examples: int,
         print(f'\tValidation Loss: {valid_loss:.3f}\t| Validation perplexity: {math.exp(valid_loss):7.3f}')
 
     # run tests
-    print('Testing model')
+    test_and_sample(model, src, trg, test_iter, criterion)
+
+
+def test_and_sample(model: Module, SRC: Field, TRG: Field, test_iter: Iterator, criterion: Module):
+    # run tests
+    print('\nTesting model')
     test_loss = utils.eval_step(model, test_iter, criterion)
     print(f'Test loss: {test_loss:.3f} | Test perplexity: {math.exp(test_loss):7.3f}')
 
@@ -111,6 +123,7 @@ def main(num_epochs: int, max_examples: int,
         print('= ', utils.seq_to_sentence(target.T[i].tolist(), TRG.vocab, [PAD_TOKEN]))
         print('< ', utils.seq_to_sentence(output.T[i].tolist(), TRG.vocab, [PAD_TOKEN]))
         print()
+    sys.exit(0)
 
 
 if __name__ == '__main__':

@@ -17,7 +17,7 @@ All other required data will be downloaded on-the-fly.
 >>> make
 ```
 
-## Training a simplification model
+## Training
 
 The `train.py` script in the [scripts](https://github.com/bencwallace/cleartext/tree/master/scripts)
 directory can be used to train a simplification model. Usage instructions can be printed as follows.
@@ -26,3 +26,6 @@ directory can be used to train a simplification model. Usage instructions can be
 >>> cd scripts
 >>> python -m train.py --help 
 ```
+
+Time spent and training/validation losses will be printed at the end of each epoch. When training
+completes or if you interrupt training, tests are run and diagnostics are printed.  
