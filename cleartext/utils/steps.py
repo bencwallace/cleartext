@@ -1,6 +1,7 @@
 import torch
 
 
+# todo: merge with eval_step
 def train_step(model, iterator, criterion, optimizer, clip=1, verbose=False):
     model.train()
     epoch_loss = 0
@@ -28,7 +29,6 @@ def train_step(model, iterator, criterion, optimizer, clip=1, verbose=False):
 
 def eval_step(model, iterator, criterion):
     model.eval()
-
     epoch_loss = 0
     with torch.no_grad():
         for _, batch in enumerate(iterator):
@@ -43,3 +43,19 @@ def eval_step(model, iterator, criterion):
             epoch_loss += loss.item()
 
     return epoch_loss / len(iterator)
+
+
+def sample(model, iterator):
+    samples = []
+    model.eval()
+    with torch.no_grad():
+        for batch in iterator:
+            source = batch.src
+            target = batch.trg
+
+            output = model(source, target, 0)
+            output = torch.argmax(output, dim=2)
+            samples.append((source, output, target))
+            # only sample first batch
+            break
+    return samples[0]

@@ -96,11 +96,11 @@ class EncoderDecoder(nn.Module):
         self.encoder = Encoder(embed_weights_src, rnn_units, dropout)
         self.attention = Attention(rnn_units, attn_units)
         self.decoder = Decoder(embed_weights_trg, rnn_units, dropout, self.attention)
-        self.device = device
 
+        self.device = device
         self.target_vocab_size = self.decoder.vocab_size
 
-    # todo: make teacher forcing optional -- later: implement beam search
+    # todo: implement beam search
     def forward(self, source, target, teacher_forcing=0.5):
         batch_size = source.shape[1]
         # todo: change max_len
@@ -111,6 +111,7 @@ class EncoderDecoder(nn.Module):
         out = target[0, :]
         for t in range(1, max_len):
             out, state = self.decoder(out, state, enc_outputs)
+            # todo: break if EOS found
             outputs[t] = out
             teacher_force = random.random() < teacher_forcing
             out = (target[t] if teacher_force else out.max(1)[1])
