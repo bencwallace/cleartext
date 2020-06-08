@@ -2,14 +2,11 @@ import torch
 
 
 # todo: merge with eval_step
-def train_step(model, iterator, criterion, optimizer, clip=1, verbose=False):
+def train_step(model, iterator, criterion, optimizer, clip=1):
     model.train()
     epoch_loss = 0
     num_batches = len(iterator)
     for i, batch in enumerate(iterator):
-        if verbose:
-            print(f'Batch {i} of {num_batches}')
-
         source = batch.src
         target = batch.trg
 
