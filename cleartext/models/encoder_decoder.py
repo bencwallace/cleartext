@@ -1,12 +1,15 @@
 import random
+import random
+from typing import Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch import Tensor
 
 
 class Encoder(nn.Module):
-    def __init__(self, embed_weights, units, dropout):
+    def __init__(self, embed_weights: Tensor, units: int, dropout: float) -> None:
         super().__init__()
         self.embedding = nn.Embedding.from_pretrained(embed_weights)
         embed_dim = embed_weights.shape[1]
@@ -14,7 +17,7 @@ class Encoder(nn.Module):
         self.fc = nn.Linear(units * 2, units)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, source):
+    def forward(self, source: Tensor) -> Tuple[Tensor, Tensor]:
         embedded = self.embedding(source)
         # todo: ensure state properly initialized
         outputs, state = self.gru(embedded)
@@ -28,13 +31,13 @@ class Encoder(nn.Module):
 
 
 class Attention(nn.Module):
-    def __init__(self, state_dim, units, dropout=0.2):
+    def __init__(self, state_dim: int, units: int, dropout: float = 0) -> None:
         super().__init__()
         self.attn_in = state_dim * 3
         self.fc = nn.Linear(self.attn_in, units)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, dec_state, enc_outputs):
+    def forward(self, dec_state: Tensor, enc_outputs: Tensor) -> None:
         source_len = enc_outputs.shape[0]
 
         # vectorize computation of Bahdanau attention scores for all encoder outputs
@@ -51,7 +54,7 @@ class Attention(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, embed_weights, units, dropout, attention):
+    def __init__(self, embed_weights: Tensor, units: int, dropout: float, attention: Attention) -> None:
         super().__init__()
         self.embedding = nn.Embedding.from_pretrained(embed_weights)
         self.vocab_size, embed_dim = embed_weights.shape
@@ -60,7 +63,7 @@ class Decoder(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.attention = attention
 
-    def forward(self, token, dec_state, enc_outputs):
+    def forward(self, token: Tensor, dec_state: Tensor, enc_outputs: Tensor) -> Tuple[Tensor, Tensor]:
         token = token.unsqueeze(0)
         embedded = self.embedding(token)
 
@@ -80,7 +83,7 @@ class Decoder(nn.Module):
         # return logits (rather than softmax activations) for compatibility with cross-entropy loss
         return output, dec_state.squeeze(0)
 
-    def _compute_context(self, dec_state, enc_outputs):
+    def _compute_context(self, dec_state: Tensor, enc_outputs: Tensor) -> Tensor:
         weights = self.attention(dec_state, enc_outputs)
         weights = weights.unsqueeze(1)
 
@@ -91,7 +94,10 @@ class Decoder(nn.Module):
 
 
 class EncoderDecoder(nn.Module):
-    def __init__(self, device, embed_weights_src, embed_weights_trg, rnn_units, attn_units, dropout):
+    def __init__(self, device: torch.device,
+                 embed_weights_src: Tensor, embed_weights_trg: Tensor,
+                 rnn_units: int, attn_units: int,
+                 dropout: float) -> None:
         super().__init__()
         self.encoder = Encoder(embed_weights_src, rnn_units, dropout)
         self.attention = Attention(rnn_units, attn_units)
@@ -101,7 +107,7 @@ class EncoderDecoder(nn.Module):
         self.target_vocab_size = self.decoder.vocab_size
 
     # todo: implement beam search
-    def forward(self, source, target, teacher_forcing=0.5):
+    def forward(self, source: Tensor, target: Tensor, teacher_forcing: float = 0.5) -> Tensor:
         batch_size = source.shape[1]
         # todo: change max_len
         max_len = target.shape[0]

@@ -31,12 +31,15 @@ CLIP = 1
 @click.option('--num_epochs', '-e', default=10, type=int, help='Number of epochs')
 @click.option('--max_examples', '-n', default=50_000, type=int, help='Max number of training examples')
 @click.option('--embed_dim', '-d', default='50', type=Choice(['50', '100', '200', '300']), help='Embedding dimension')
-@click.option('--src_vocab', '-s', default=5_000, type=int, help='Max source vocabulary size')
+# @click.option('--src_vocab', '-s', default=5_000, type=int, help='Max source vocabulary size')
 @click.option('--trg_vocab', '-t', default=2_000, type=int, help='Max target vocabulary size')
 @click.option('--rnn_units', '-r', default=100, type=int, help='Number of RNN units')
 @click.option('--attn_units', '-a', default=100, type=int, help='Number of attention units')
 @click.option('--dropout', '-p', default=0.2, type=float, help='Dropout probability')
-def main(num_epochs, max_examples, embed_dim, src_vocab, trg_vocab, rnn_units, attn_units, dropout):
+def main(num_epochs: int, max_examples: int,
+         embed_dim: str, trg_vocab: int,
+         rnn_units: int, attn_units: int,
+         dropout: float) -> None:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'Using {device}')
 
@@ -60,7 +63,7 @@ def main(num_epochs, max_examples, embed_dim, src_vocab, trg_vocab, rnn_units, a
     glove = f'glove.6B.{embed_dim}d'
     # todo: fix error when actual vocabulary loaded is less than max size
     vocab_args = {'min_freq': MIN_FREQ, 'vectors': glove, 'vectors_cache': vectors_path}
-    SRC.build_vocab(train_data, max_size=src_vocab, **vocab_args)
+    SRC.build_vocab(train_data, **vocab_args)
     TRG.build_vocab(train_data, max_size=trg_vocab, **vocab_args)
 
     # prepare data

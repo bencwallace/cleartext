@@ -1,8 +1,10 @@
 import io
 import os
 import tarfile
+from pathlib import Path
+from typing import Tuple
 
-from torchtext.data import Example
+from torchtext.data import Example, Field
 from torchtext.datasets import TranslationDataset
 
 from ..utils import get_proj_root
@@ -17,7 +19,7 @@ class WikiSL(TranslationDataset):
 
     # needed in order to deal with .tar.bz2 files
     @classmethod
-    def splits(cls, fields, **kwargs):
+    def splits(cls, fields: Tuple[Field, Field], **kwargs):
         exts = ('.src', '.dst')
         root = PROJ_ROOT / 'data/raw/'
 
@@ -43,7 +45,7 @@ class WikiSL(TranslationDataset):
         return super().splits(exts, fields, path=path, root=root, train=train, validation=valid, test=test, **kwargs)
 
     # needed in order to limit number of examples
-    def __init__(self, path, exts, fields, **kwargs):
+    def __init__(self, path: Path, exts: Tuple[str, str], fields: Tuple[Field, Field], **kwargs) -> None:
         if not isinstance(fields[0], (tuple, list)):
             fields = [('src', fields[0]), ('trg', fields[1])]
 

@@ -1,8 +1,14 @@
+from typing import Tuple
+
 import torch
+from torch import Tensor
+from torch.nn import Module
+from torch.optim.optimizer import Optimizer
+from torchtext.data import Iterator
 
 
 # todo: merge with eval_step
-def train_step(model, iterator, criterion, optimizer, clip=1):
+def train_step(model: Module, iterator: Iterator, criterion: Module, optimizer: Optimizer, clip: int = 1) -> float:
     model.train()
     epoch_loss = 0
     num_batches = len(iterator)
@@ -24,7 +30,7 @@ def train_step(model, iterator, criterion, optimizer, clip=1):
     return epoch_loss / len(iterator)
 
 
-def eval_step(model, iterator, criterion):
+def eval_step(model: Module, iterator: Iterator, criterion: Module):
     model.eval()
     epoch_loss = 0
     with torch.no_grad():
@@ -42,7 +48,7 @@ def eval_step(model, iterator, criterion):
     return epoch_loss / len(iterator)
 
 
-def sample(model, iterator, ignore):
+def sample(model: Module, iterator: Iterator, ignore) -> Tuple[Tensor, Tensor, Tensor]:
     samples = []
     model.eval()
     with torch.no_grad():

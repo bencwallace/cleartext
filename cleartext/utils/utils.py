@@ -1,28 +1,31 @@
-from pathlib import Path
 import re
 import unicodedata
+from pathlib import Path
+from typing import Tuple
 
 from torch import nn as nn
+from torch.nn import Module
+from torchtext.vocab import Vocab
 
 
-def get_proj_root():
+def get_proj_root() -> Path:
     return Path(__file__).parent.parent.parent
 
 
-def count_parameters(model):
+def count_parameters(model: Module) -> Tuple[int, int, int]:
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     fixed = sum(p.numel() for p in model.parameters() if not p.requires_grad)
     return trainable, trainable + fixed
 
 
-def format_time(start, stop):
+def format_time(start: float, stop: float) -> Tuple[int, int]:
     elapsed = stop - start
     mins = int(elapsed / 60)
     secs = int(elapsed - (mins * 60))
     return mins, secs
 
 
-def init_weights(model):
+def init_weights(model: Module) -> None:
     for name, param in model.named_parameters():
         if 'weight' in name:
             nn.init.xavier_uniform_(param.data)
@@ -30,14 +33,14 @@ def init_weights(model):
             nn.init.constant_(param.data, 0)
 
 
-def seq_to_sentence(seq, vocab, ignore):
+def seq_to_sentence(seq, vocab: Vocab, ignore) -> str:
     def itos(i):
         s = vocab.itos[i]
         return '' if s in ignore else s
     return ' '.join(list(map(itos, seq)))
 
 
-def preprocess_string(s):
+def preprocess_string(s: str) -> str:
     s = s.lower().strip()
     s = ''.join(c for c in unicodedata.normalize('NFD', s)
                 if unicodedata.category(c) != 'Mn')
