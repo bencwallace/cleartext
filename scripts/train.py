@@ -24,16 +24,16 @@ MIN_FREQ = 2
 NUM_SAMPLES = 4
 
 # defaults for CLI arguments
-NUM_TOKENS = 1000
+NUM_TOKENS = 10_000
 EMBED_DIM = 50
-MAX_EXAMPLES = 1000
+MAX_EXAMPLES = 30_000
 RNN_UNITS = 100
 ATTN_UNITS = 50
 DROPOUT = 0.2
 CLIP = 1
 
 # usage:
-# >>> python -m test.py NUM_EPOCHS [MAX_EXAMPLES] [EMBED_DIM] [NUM_TOKENS] [VERBOSE]
+# >>> python -m train NUM_EPOCHS [MAX_EXAMPLES] [EMBED_DIM] [NUM_TOKENS] [VERBOSE]
 if __name__ == '__main__':
     # parse arguments
     num_epochs = int(sys.argv[1])

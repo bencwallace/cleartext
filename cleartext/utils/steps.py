@@ -55,10 +55,13 @@ def sample(model, iterator, ignore):
 
             output = model(source, target, 0)
             # apply mask -- todo: vectorize
+            print(output.shape)
             for i in ignore:
-                output.data[i] = 0
+                output.data[:, :, i] = 0
+
             output = torch.argmax(output, dim=2)
             samples.append((source, output, target))
+
             # only sample first batch
             break
     return samples[0]
