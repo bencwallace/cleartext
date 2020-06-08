@@ -30,10 +30,10 @@ def init_weights(model):
             nn.init.constant_(param.data, 0)
 
 
-def seq_to_sentence(seq, vocab, pad_token):
+def seq_to_sentence(seq, vocab, ignore):
     def itos(i):
         s = vocab.itos[i]
-        return '' if s == pad_token else s
+        return '' if s in ignore else s
     return ' '.join(list(map(itos, seq)))
 
 

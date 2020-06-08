@@ -45,7 +45,7 @@ def eval_step(model, iterator, criterion):
     return epoch_loss / len(iterator)
 
 
-def sample(model, iterator):
+def sample(model, iterator, ignore):
     samples = []
     model.eval()
     with torch.no_grad():
@@ -54,6 +54,9 @@ def sample(model, iterator):
             target = batch.trg
 
             output = model(source, target, 0)
+            # apply mask -- todo: vectorize
+            for i in ignore:
+                output.data[i] = 0
             output = torch.argmax(output, dim=2)
             samples.append((source, output, target))
             # only sample first batch

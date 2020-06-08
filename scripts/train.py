@@ -12,7 +12,13 @@ from cleartext.data import WikiSmall
 from cleartext.models import EncoderDecoder
 
 
-# fixed
+# arbitrary choices
+EOS_TOKEN = '<eos>'
+SOS_TOKEN = '<sos>'
+PAD_TOKEN = '<pad>'
+UNK_TOKEN = '<unk>'
+
+# fixed choices
 BATCH_SIZE = 32
 MIN_FREQ = 2
 NUM_SAMPLES = 4
@@ -25,11 +31,6 @@ RNN_UNITS = 100
 ATTN_UNITS = 50
 DROPOUT = 0.2
 CLIP = 1
-
-# arbitrary choices
-EOS_TOKEN = '<eos>'
-SOS_TOKEN = '<sos>'
-PAD_TOKEN = '<pad>'
 
 # usage:
 # >>> python -m test.py NUM_EPOCHS [MAX_EXAMPLES] [EMBED_DIM] [NUM_TOKENS] [VERBOSE]
@@ -53,6 +54,7 @@ if __name__ == '__main__':
                   'eos_token': EOS_TOKEN,
                   'lower': True,
                   'pad_token': PAD_TOKEN,
+                  'unk_token': UNK_TOKEN,
                   'preprocessing': utils.preprocess}
     FIELD = Field(**field_args)
     train_data, valid_data, test_data = data = WikiSmall.splits(fields=(FIELD, FIELD), max_examples=max_examples)
@@ -97,9 +99,10 @@ if __name__ == '__main__':
     print(f'Test loss: {test_loss:.3f} | Test perplexity: {math.exp(test_loss):7.3f}')
 
     print('Model sample')
-    source, output, target = utils.sample(model, test_iter)
+    ignore = list(map(lambda s: FIELD.vocab.stoi[s], [UNK_TOKEN, SOS_TOKEN, EOS_TOKEN, PAD_TOKEN]))
+    source, output, target = utils.sample(model, test_iter, ignore)
     for i in torch.randint(0, len(source), (NUM_SAMPLES,)):
-        print('> ', utils.seq_to_sentence(source.T[i].tolist(), FIELD.vocab, PAD_TOKEN))
-        print('= ', utils.seq_to_sentence(target.T[i].tolist(), FIELD.vocab, PAD_TOKEN))
-        print('< ', utils.seq_to_sentence(output.T[i].tolist(), FIELD.vocab, PAD_TOKEN))
+        print('> ', utils.seq_to_sentence(source.T[i].tolist(), FIELD.vocab, [PAD_TOKEN]))
+        print('= ', utils.seq_to_sentence(target.T[i].tolist(), FIELD.vocab, [PAD_TOKEN]))
+        print('< ', utils.seq_to_sentence(output.T[i].tolist(), FIELD.vocab, [PAD_TOKEN]))
         print()
