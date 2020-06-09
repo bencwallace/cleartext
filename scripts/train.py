@@ -86,7 +86,7 @@ def main(num_epochs: int, max_examples: int,
     criterion = nn.CrossEntropyLoss(ignore_index=trg.vocab.stoi[PAD_TOKEN])
 
     # define register signal handler
-    def signal_handler(sig, frame):
+    def signal_handler(_signal, _frame):
         test_and_sample(model, src, trg, test_iter, criterion)
     signal.signal(signal.SIGINT, signal_handler)
 
@@ -101,14 +101,14 @@ def main(num_epochs: int, max_examples: int,
 
         epoch_mins, epoch_secs = utils.format_time(start_time, end_time)
         print(f'Epoch: {epoch+1:02} | Time: {epoch_mins}m {epoch_secs}s')
-        print(f'\tTraining loss: {train_loss:.3f}\t| Training perplexity: {math.exp(train_loss):7.3f}')
-        print(f'\tValidation Loss: {valid_loss:.3f}\t| Validation perplexity: {math.exp(valid_loss):7.3f}')
+        utils.print_loss(train_loss, 'Train')
+        utils.print_loss(valid_loss, 'Valid')
 
     # run tests
     test_and_sample(model, src, trg, test_iter, criterion)
 
 
-def test_and_sample(model: Module, SRC: Field, TRG: Field, test_iter: Iterator, criterion: Module):
+def test_and_sample(model: Module, src: Field, trg: Field, test_iter: Iterator, criterion: Module):
     # run tests
     print('\nTesting model')
     test_loss = utils.eval_step(model, test_iter, criterion)
@@ -116,12 +116,12 @@ def test_and_sample(model: Module, SRC: Field, TRG: Field, test_iter: Iterator, 
 
     # print some translation samples
     print('Model sample')
-    ignore = list(map(lambda s: TRG.vocab.stoi[s], [UNK_TOKEN, SOS_TOKEN, EOS_TOKEN, PAD_TOKEN]))
+    ignore = list(map(lambda s: trg.vocab.stoi[s], [UNK_TOKEN, SOS_TOKEN, EOS_TOKEN, PAD_TOKEN]))
     source, output, target = utils.sample(model, test_iter, ignore)
     for i in torch.randint(0, len(source), (NUM_SAMPLES,)):
-        print('> ', utils.seq_to_sentence(source.T[i].tolist(), SRC.vocab, [PAD_TOKEN]))
-        print('= ', utils.seq_to_sentence(target.T[i].tolist(), TRG.vocab, [PAD_TOKEN]))
-        print('< ', utils.seq_to_sentence(output.T[i].tolist(), TRG.vocab, [PAD_TOKEN]))
+        print('> ', utils.seq_to_sentence(source.T[i].tolist(), src.vocab, [PAD_TOKEN]))
+        print('= ', utils.seq_to_sentence(target.T[i].tolist(), trg.vocab, [PAD_TOKEN]))
+        print('< ', utils.seq_to_sentence(output.T[i].tolist(), trg.vocab, [PAD_TOKEN]))
         print()
     sys.exit(0)
 

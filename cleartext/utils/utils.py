@@ -1,3 +1,4 @@
+import math
 import re
 import unicodedata
 from pathlib import Path
@@ -33,6 +34,7 @@ def init_weights(model: Module) -> None:
             nn.init.constant_(param.data, 0)
 
 
+# todo: use tokenizer to remove space around punctuation, etc.
 def seq_to_sentence(seq, vocab: Vocab, ignore) -> str:
     def itos(i):
         s = vocab.itos[i]
@@ -50,3 +52,7 @@ def preprocess_string(s: str) -> str:
 
 def preprocess(strings):
     return list(map(preprocess_string, strings))
+
+
+def print_loss(loss: float, name: str = '') -> None:
+    print(f'\t{name} loss:\t{loss:.3f}\t| {name} perplexity:\t{math.exp(loss):7.3f}')
