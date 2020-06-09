@@ -87,7 +87,7 @@ def main(num_epochs: int, max_examples: int,
     # define register signal handler
     def signal_handler(_signal, _frame):
         test(model, src, trg, test_iter, criterion)
-        sample(model, src, trg, test_data, NUM_SAMPLES)
+        sample(device, model, src, trg, test_data, NUM_SAMPLES)
         sys.exit(0)
     signal.signal(signal.SIGINT, signal_handler)
 
@@ -107,16 +107,16 @@ def main(num_epochs: int, max_examples: int,
 
     # run tests
     test(model, src, trg, test_iter, criterion)
-    sample(model, src, trg, test_data, NUM_SAMPLES)
+    sample(device, model, src, trg, test_data, NUM_SAMPLES)
 
 
-def sample(model, src, trg, test_data, num_examples):
+def sample(device, model, src, trg, test_data, num_examples):
     # todo: randomize examples
     sources, targets = zip(*((example.src, example.trg) for example in test_data[:num_examples]))
 
     # translate
-    source_tensor = src.process(sources)
-    dummy = torch.zeros(source_tensor.shape, dtype=int)
+    source_tensor = src.process(sources).to(device)
+    dummy = torch.zeros(source_tensor.shape, dtype=int, device=device)
     dummy.fill_(trg.vocab[SOS_TOKEN])
     output = model(source_tensor, dummy, 0)[1:]
     for i in map(trg.vocab.stoi.get, [SOS_TOKEN, UNK_TOKEN, PAD_TOKEN]):
