@@ -54,11 +54,10 @@ def main(num_epochs: int, max_examples: int,
     }
     src = Field(**field_args)
     trg = Field(**field_args)
-
     train_data, valid_data, test_data = WikiSmall.splits(fields=(src, trg), max_examples=max_examples)
     print(f'Loaded {len(train_data)} training examples')
 
-    # load embeddings
+    # load embeddings and build vocabulary
     print(f'Loading {embed_dim}-dimensional GloVe vectors')
     proj_root = utils.get_proj_root()
     vectors_path = proj_root / '.vector_cache'
@@ -68,7 +67,7 @@ def main(num_epochs: int, max_examples: int,
     src.build_vocab(train_data, **vocab_args)
     trg.build_vocab(train_data, max_size=trg_vocab, **vocab_args)
 
-    # prepare data
+    # batch data
     iters = BucketIterator.splits((train_data, valid_data, test_data), batch_size=BATCH_SIZE, device=device)
     train_iter, valid_iter, test_iter = iters
     print(f'Source vocabulary size: {len(src.vocab)}')
@@ -87,7 +86,9 @@ def main(num_epochs: int, max_examples: int,
 
     # define register signal handler
     def signal_handler(_signal, _frame):
-        test_and_sample(model, src, trg, test_iter, criterion)
+        test(model, src, trg, test_iter, criterion)
+        sample(model, src, trg, test_data, NUM_SAMPLES)
+        sys.exit(0)
     signal.signal(signal.SIGINT, signal_handler)
 
     # start training cycle -- todo: update and use checkpoints
@@ -105,25 +106,46 @@ def main(num_epochs: int, max_examples: int,
         utils.print_loss(valid_loss, 'Valid')
 
     # run tests
-    test_and_sample(model, src, trg, test_iter, criterion)
+    test(model, src, trg, test_iter, criterion)
+    sample(model, src, trg, test_data, NUM_SAMPLES)
 
 
-def test_and_sample(model: Module, src: Field, trg: Field, test_iter: Iterator, criterion: Module):
+def sample(model, src, trg, test_data, num_examples):
+    # todo: randomize examples
+    sources, targets = zip(*((example.src, example.trg) for example in test_data[:num_examples]))
+
+    # translate
+    source_tensor = src.process(sources)
+    dummy = torch.zeros(source_tensor.shape, dtype=int)
+    dummy.fill_(trg.vocab[SOS_TOKEN])
+    output = model(source_tensor, dummy, 0)[1:]
+    for i in map(trg.vocab.stoi.get, [SOS_TOKEN, UNK_TOKEN, PAD_TOKEN]):
+        output.data[:, :, i] = 0
+    output = output.argmax(dim=2)
+
+    # trim and denumericalize
+    output = output.T.tolist()
+    trimmed = []
+    for out in output:
+        try:
+            eos_index = out.index(trg.vocab[EOS_TOKEN])
+        except ValueError:
+            eos_index = len(out)
+        out = out[:eos_index]
+        out = list(map(lambda i: trg.vocab.itos[i], out))
+        trimmed.append(out)
+
+    for i in range(num_examples):
+        print('> ', ' '.join(sources[i]))
+        print('= ', ' '.join(targets[i]))
+        print('< ', ' '.join(trimmed[i]))
+
+
+def test(model: Module, src: Field, trg: Field, test_iter: Iterator, criterion: Module):
     # run tests
     print('\nTesting model')
     test_loss = utils.eval_step(model, test_iter, criterion)
     print(f'Test loss: {test_loss:.3f} | Test perplexity: {math.exp(test_loss):7.3f}')
-
-    # print some translation samples
-    print('Model sample')
-    ignore = list(map(lambda s: trg.vocab.stoi[s], [UNK_TOKEN, SOS_TOKEN, EOS_TOKEN, PAD_TOKEN]))
-    source, output, target = utils.sample(model, test_iter, ignore)
-    for i in torch.randint(0, len(source), (NUM_SAMPLES,)):
-        print('> ', utils.seq_to_sentence(source.T[i].tolist(), src.vocab, [PAD_TOKEN]))
-        print('= ', utils.seq_to_sentence(target.T[i].tolist(), trg.vocab, [PAD_TOKEN]))
-        print('< ', utils.seq_to_sentence(output.T[i].tolist(), trg.vocab, [PAD_TOKEN]))
-        print()
-    sys.exit(0)
 
 
 if __name__ == '__main__':

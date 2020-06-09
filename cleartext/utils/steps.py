@@ -5,12 +5,13 @@ from torch import Tensor
 from torch.nn import Module
 from torch.optim.optimizer import Optimizer
 from torchtext.data import Iterator
+from torchtext.data.metrics import bleu_score
 
 
 def train_step(model: Module, iterator: Iterator, criterion: Module, optimizer: Optimizer, clip: int = 1) -> float:
     model.train()
     epoch_loss = 0
-    for i, batch in enumerate(iterator):
+    for batch in iterator:
         source = batch.src
         target = batch.trg
 
@@ -44,25 +45,3 @@ def eval_step(model: Module, iterator: Iterator, criterion: Module) -> float:
             epoch_loss += loss.item()
 
     return epoch_loss / len(iterator)
-
-
-# todo: this is a hack, fix it
-def sample(model: Module, iterator: Iterator, ignore) -> Tuple[Tensor, Tensor, Tensor]:
-    samples = []
-    model.eval()
-    with torch.no_grad():
-        for batch in iterator:
-            source = batch.src
-            target = batch.trg
-
-            output = model(source, target, 0)
-            # apply mask -- todo: vectorize
-            for i in ignore:
-                output.data[:, :, i] = 0
-
-            output = torch.argmax(output, dim=2)
-            samples.append((source, output, target))
-
-            # only sample first batch
-            break
-    return samples[0]
