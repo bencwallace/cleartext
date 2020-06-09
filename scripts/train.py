@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.nn import Module
 from torchtext.data import BucketIterator, Field, Iterator
+from torchtext.data.metrics import bleu_score
 
 import cleartext.utils as utils
 from cleartext.data import WikiSmall
@@ -37,7 +38,7 @@ CLIP = 1
 @click.option('--trg_vocab', '-t', default=2_000, type=int, help='Max target vocabulary size')
 @click.option('--rnn_units', '-r', default=100, type=int, help='Number of RNN units')
 @click.option('--attn_units', '-a', default=100, type=int, help='Number of attention units')
-@click.option('--dropout', '-p', default=0.2, type=float, help='Dropout probability')
+@click.option('--dropout', '-p', default=0.3, type=float, help='Dropout probability')
 def main(num_epochs: int, max_examples: int,
          embed_dim: str, trg_vocab: int,
          rnn_units: int, attn_units: int,
@@ -62,7 +63,6 @@ def main(num_epochs: int, max_examples: int,
     proj_root = utils.get_proj_root()
     vectors_path = proj_root / '.vector_cache'
     glove = f'glove.6B.{embed_dim}d'
-    # todo: fix error when actual vocabulary loaded is less than max size
     vocab_args = {'min_freq': MIN_FREQ, 'vectors': glove, 'vectors_cache': vectors_path}
     src.build_vocab(train_data, **vocab_args)
     trg.build_vocab(train_data, max_size=trg_vocab, **vocab_args)
@@ -86,8 +86,7 @@ def main(num_epochs: int, max_examples: int,
 
     # define register signal handler
     def signal_handler(_signal, _frame):
-        test(model, src, trg, test_iter, criterion)
-        sample(device, model, src, trg, test_data, NUM_SAMPLES)
+        finalize(device, model, src, trg, test_data, test_iter, criterion, NUM_SAMPLES)
         sys.exit(0)
     signal.signal(signal.SIGINT, signal_handler)
 
@@ -107,23 +106,51 @@ def main(num_epochs: int, max_examples: int,
 
     # run tests
     test(model, src, trg, test_iter, criterion)
-    sample(device, model, src, trg, test_data, NUM_SAMPLES)
+    print_samples(device, model, src, trg, test_data, NUM_SAMPLES)
+
+
+def finalize(device, model, src, trg, test_data, test_iter, criterion, num_examples):
+    test(model, src, trg, test_iter, criterion)
+    print_samples(device, model, src, trg, test_data, num_examples)
+
+
+def print_samples(device, model, src, trg, test_data, num_examples):
+    sources, targets, outputs = sample(device, model, src, trg, test_data, num_examples)
+    for source, target, output in zip(sources, targets, outputs):
+        print('> ', ' '.join(source))
+        print('= ', ' '.join(target))
+        print('< ', ' '.join(output))
+
+    # compute bleu score
+    sources, targets, outputs = sample(device, model, src, trg, test_data, len(test_data))
+    score = 0
+    for target, output in zip(targets, outputs):
+        # space tokens kill bleu score for some reason
+        target = ' '.join(target).split()
+        output = ' '.join(output).split()
+        score += bleu_score([target], [[output]])
+    score /= len(targets)
+    print(f'Avg BLEU score: {score:.3f}')
 
 
 def sample(device, model, src, trg, test_data, num_examples):
+    model.eval()
     # todo: randomize examples
     sources, targets = zip(*((example.src, example.trg) for example in test_data[:num_examples]))
 
-    # translate
+    # run model with dummy target
     source_tensor = src.process(sources).to(device)
     dummy = torch.zeros(source_tensor.shape, dtype=int, device=device)
     dummy.fill_(trg.vocab[SOS_TOKEN])
+
+    # select most likely tokens (ignoring non-word tokens)
     output = model(source_tensor, dummy, 0)[1:]
+    # todo: vectorize masking
     for i in map(trg.vocab.stoi.get, [SOS_TOKEN, UNK_TOKEN, PAD_TOKEN]):
         output.data[:, :, i] = 0
     output = output.argmax(dim=2)
 
-    # trim and denumericalize
+    # trim past eos token and denumericalize
     output = output.T.tolist()
     trimmed = []
     for out in output:
@@ -135,16 +162,13 @@ def sample(device, model, src, trg, test_data, num_examples):
         out = list(map(lambda i: trg.vocab.itos[i], out))
         trimmed.append(out)
 
-    for i in range(num_examples):
-        print('> ', ' '.join(sources[i]))
-        print('= ', ' '.join(targets[i]))
-        print('< ', ' '.join(trimmed[i]))
+    return sources, targets, trimmed
 
 
 def test(model: Module, src: Field, trg: Field, test_iter: Iterator, criterion: Module):
-    # run tests
     print('\nTesting model')
     test_loss = utils.eval_step(model, test_iter, criterion)
+    # todo: use print_loss
     print(f'Test loss: {test_loss:.3f} | Test perplexity: {math.exp(test_loss):7.3f}')
 
 

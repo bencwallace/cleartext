@@ -1,11 +1,9 @@
 from typing import Tuple
 
 import torch
-from torch import Tensor
 from torch.nn import Module
 from torch.optim.optimizer import Optimizer
 from torchtext.data import Iterator
-from torchtext.data.metrics import bleu_score
 
 
 def train_step(model: Module, iterator: Iterator, criterion: Module, optimizer: Optimizer, clip: int = 1) -> float:
