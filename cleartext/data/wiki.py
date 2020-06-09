@@ -7,10 +7,7 @@ from typing import Tuple
 from torchtext.data import Example, Field
 from torchtext.datasets import TranslationDataset
 
-from ..utils import get_proj_root
-
-
-PROJ_ROOT = get_proj_root()
+from cleartext import PROJ_ROOT
 
 
 class WikiSL(TranslationDataset):

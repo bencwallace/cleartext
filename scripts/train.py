@@ -14,6 +14,7 @@ from torchtext.data import BucketIterator, Field, Iterator
 from torchtext.data.metrics import bleu_score
 
 import cleartext.utils as utils
+from cleartext import PROJ_ROOT
 from cleartext.data import WikiSmall
 from cleartext.models import EncoderDecoder
 
@@ -60,8 +61,7 @@ def main(num_epochs: int, max_examples: int,
 
     # load embeddings and build vocabulary
     print(f'Loading {embed_dim}-dimensional GloVe vectors')
-    proj_root = utils.get_proj_root()
-    vectors_path = proj_root / '.vector_cache'
+    vectors_path = PROJ_ROOT / '.vector_cache'
     glove = f'glove.6B.{embed_dim}d'
     vocab_args = {'min_freq': MIN_FREQ, 'vectors': glove, 'vectors_cache': vectors_path}
     src.build_vocab(train_data, **vocab_args)

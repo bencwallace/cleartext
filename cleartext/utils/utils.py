@@ -9,10 +9,6 @@ from torch.nn import Module
 from torchtext.vocab import Vocab
 
 
-def get_proj_root() -> Path:
-    return Path(__file__).parent.parent.parent
-
-
 def count_parameters(model: Module) -> Tuple[int, int]:
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
     fixed = sum(p.numel() for p in model.parameters() if not p.requires_grad)
