@@ -15,11 +15,9 @@ import cleartext.utils as utils
 from cleartext import PROJ_ROOT
 from cleartext.data import WikiSmall
 from cleartext.models import EncoderDecoder
-
+from cleartext.utils.run import sample
 
 # arbitrary choices
-from utils.run import sample
-
 EOS_TOKEN = '<eos>'
 SOS_TOKEN = '<sos>'
 PAD_TOKEN = '<pad>'
@@ -30,6 +28,7 @@ BATCH_SIZE = 32
 MIN_FREQ = 2
 NUM_SAMPLES = 4
 CLIP = 1
+MODELS_ROOT = PROJ_ROOT / 'models'
 
 
 @click.command()
@@ -44,6 +43,13 @@ def main(num_epochs: int, max_examples: int,
          embed_dim: str, trg_vocab: int,
          rnn_units: int, attn_units: int,
          dropout: float) -> None:
+    # define register signal handler
+    def signal_handler(_signal, _frame):
+        finalize(device, model, src, trg, test_data, test_iter, criterion, NUM_SAMPLES)
+        sys.exit(0)
+    signal.signal(signal.SIGINT, signal_handler)
+
+    # set device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'Using {device}')
 
@@ -66,6 +72,9 @@ def main(num_epochs: int, max_examples: int,
     vocab_args = {'min_freq': MIN_FREQ, 'vectors': glove, 'vectors_cache': vectors_path}
     src.build_vocab(train_data, **vocab_args)
     trg.build_vocab(train_data, max_size=trg_vocab, **vocab_args)
+    # todo: check if files exists
+    torch.save(src, MODELS_ROOT / f'src-{embed_dim}d.pt')
+    torch.save(trg, MODELS_ROOT / f'trg-{embed_dim}d-{trg_vocab}')
 
     # batch data
     iters = BucketIterator.splits((train_data, valid_data, test_data), batch_size=BATCH_SIZE, device=device)
@@ -84,12 +93,6 @@ def main(num_epochs: int, max_examples: int,
     optimizer = optim.Adam(model.parameters())
     criterion = nn.CrossEntropyLoss(ignore_index=trg.vocab.stoi[PAD_TOKEN])
 
-    # define register signal handler
-    def signal_handler(_signal, _frame):
-        finalize(device, model, src, trg, test_data, test_iter, criterion, NUM_SAMPLES)
-        sys.exit(0)
-    signal.signal(signal.SIGINT, signal_handler)
-
     # start training cycle -- todo: update and use checkpoints
     print(f'Training model for {num_epochs} epochs')
     best_valid_loss = float('inf')
@@ -104,32 +107,49 @@ def main(num_epochs: int, max_examples: int,
         utils.print_loss(train_loss, 'Train')
         utils.print_loss(valid_loss, 'Valid')
 
-    finalize(device, model, src, trg, test_data, test_iter, criterion, NUM_SAMPLES)
+        # save everything
+        if valid_loss < best_valid_loss:
+            best_valid_loss = valid_loss
+            filename = f'gru-{max_examples}-{embed_dim}-{trg_vocab}-{rnn_units}-{attn_units}.pt'
+            torch.save(model, MODELS_ROOT / filename)
+            with open(str(MODELS_ROOT / filename) + '.epoch', 'w') as f:
+                f.write(f'Epoch {epoch} ({epoch_mins}m {epoch_secs}s)\n')
+
+    finalize(device, model, src, trg, test_data, test_iter, criterion, NUM_SAMPLES, filename)
 
 
-def finalize(device, model, src, trg, test_data, test_iter, criterion, num_examples):
+def finalize(device, model, src, trg, test_data, test_iter, criterion, num_examples, filename):
     def exit(_signal, _frame):
         sys.exit(0)
     signal.signal(signal.SIGINT, exit)
-    print_diagnostics(device, model, criterion, src, trg, test_data, test_iter, num_examples)
+    print_diagnostics(device, model, criterion, src, trg, test_data, test_iter, num_examples, filename)
 
 
-def print_diagnostics(device, model, criterion, src, trg, test_data, test_iter, num_examples):
+def print_diagnostics(device, model, criterion, src, trg, test_data, test_iter, num_examples, filename):
     # Compute and print test loss
     print('\nTesting model')
     test_loss = utils.eval_step(model, test_iter, criterion)
     utils.print_loss(test_loss, 'Test')
 
     # Generate and print sample translations
-    ignore_tokens = [SOS_TOKEN, UNK_TOKEN, PAD_TOKEN]
-    sources, targets, outputs = sample(device, model, src, trg, test_data, num_examples, ignore_tokens)
+    ignore_tokens = [UNK_TOKEN, PAD_TOKEN]
+    sources, targets, outputs = sample(device, model, src, trg, test_data, num_examples, SOS_TOKEN, EOS_TOKEN, ignore_tokens)
+    source_outs = target_outs = output_outs = []
     for source, target, output in zip(sources, targets, outputs):
-        print('> ', ' '.join(source))
-        print('= ', ' '.join(target))
-        print('< ', ' '.join(output))
+        source_out = '> ' + ' '.join(source)
+        target_out = '= ' + ' '.join(target)
+        output_out = '< ' + ' '.join(output)
+
+        source_outs.append(source_out)
+        target_outs.append(target_out)
+        output_outs.append(output_out)
+
+        print(source_out)
+        print(target_out)
+        print(output_out)
 
     # Compute and print BLEU score
-    sources, targets, outputs = sample(device, model, src, trg, test_data, len(test_data), ignore_tokens)
+    sources, targets, outputs = sample(device, model, src, trg, test_data, len(test_data), SOS_TOKEN, EOS_TOKEN, ignore_tokens)
     score = 0
     for target, output in zip(targets, outputs):
         # kill whitespace tokens, which crash bleu_score for some reason
@@ -139,6 +159,14 @@ def print_diagnostics(device, model, criterion, src, trg, test_data, test_iter, 
         score += bleu_score([target], [[output]])
     score /= len(targets)
     print(f'Average BLEU score: {score:.3f}')
+
+    with open(str(MODELS_ROOT / filename) + '.test', 'a') as f:
+        f.write(f'Test loss: {test_loss}\n')
+        f.write(f'BLEU score: {score}\n')
+        for source_out, target_out, output_out in zip(source_outs, target_outs, output_outs):
+            f.write(source_out + '\n')
+            f.write(target_out + '\n')
+            f.write(output_out + '\n')
 
 
 if __name__ == '__main__':

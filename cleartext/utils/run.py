@@ -3,8 +3,6 @@ from torch.nn import Module
 from torch.optim.optimizer import Optimizer
 from torchtext.data import Iterator
 
-from scripts.train import SOS_TOKEN, EOS_TOKEN
-
 
 def train_step(model: Module, iterator: Iterator, criterion: Module, optimizer: Optimizer, clip: int = 1) -> float:
     model.train()
@@ -45,7 +43,7 @@ def eval_step(model: Module, iterator: Iterator, criterion: Module) -> float:
     return epoch_loss / len(iterator)
 
 
-def sample(device, model, src, trg, test_data, num_examples, ignore_tokens):
+def sample(device, model, src, trg, test_data, num_examples, sos_token, eos_token, ignore_tokens):
     model.eval()
     # todo: randomize examples
     sources, targets = zip(*((example.src, example.trg) for example in test_data[:num_examples]))
@@ -53,7 +51,7 @@ def sample(device, model, src, trg, test_data, num_examples, ignore_tokens):
     # run model with dummy target
     source_tensor = src.process(sources).to(device)
     dummy = torch.zeros(source_tensor.shape, dtype=int, device=device)
-    dummy.fill_(trg.vocab[SOS_TOKEN])
+    dummy.fill_(trg.vocab[sos_token])
 
     # select most likely tokens (ignoring non-word tokens)
     output = model(source_tensor, dummy, 0)[1:]
@@ -67,7 +65,7 @@ def sample(device, model, src, trg, test_data, num_examples, ignore_tokens):
     trimmed = []
     for out in output:
         try:
-            eos_index = out.index(trg.vocab[EOS_TOKEN])
+            eos_index = out.index(trg.vocab[eos_token])
         except ValueError:
             eos_index = len(out)
         out = out[:eos_index]

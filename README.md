@@ -24,7 +24,7 @@ directory can be used to train a simplification model. Usage instructions can be
 
 ```bash
 >>> cd scripts
->>> python -m train.py --help 
+>>> python -m train --help 
 ```
 
 Time spent and training/validation losses will be printed at the end of each epoch. When training
