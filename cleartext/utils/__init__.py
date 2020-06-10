@@ -6,4 +6,5 @@ __all__ = ['init_weights',
            'count_parameters',
            'seq_to_sentence',
            'preprocess',
-           'print_loss']
+           'print_loss'
+           ]
