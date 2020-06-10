@@ -208,48 +208,46 @@ class Pipeline(object):
         test_loss = utils.eval_step(self.model, self.test_iter, self.criterion)
         utils.print_loss(test_loss, 'Test')
 
-        # todo: uncomment once `sample` is fixed
-        # # Generate and print samples
-        # sources, targets, outputs = self.sample()
-        # source_outs = []
-        # target_outs = []
-        # output_outs = []
-        # for source, target, output in zip(sources, targets, outputs):
-        #     source_out = '> ' + ' '.join(source)
-        #     target_out = '= ' + ' '.join(target)
-        #     output_out = '< ' + ' '.join(output)
-        #
-        #     source_outs.append(source_out)
-        #     target_outs.append(target_out)
-        #     output_outs.append(output_out)
-        #
-        #     print(source_out)
-        #     print(target_out)
-        #     print(output_out)
-        #
-        # # Compute and print BLEU score
-        # sources, targets, outputs = self.sample()
-        # score = 0
-        # for target, output in zip(targets, outputs):
-        #     # kill whitespace tokens, which crash BLEU score for some reason
-        #     target = ' '.join(target).split()
-        #     output = ' '.join(output).split()
-        #
-        #     score += bleu_score([target], [[output]])
-        # score /= len(targets)
-        # print(f'Average BLEU score: {score:.3f}')
-        #
-        # # save summary data
-        # path = str(self.model_path) + '.txt'
-        # with open(path, 'w') as f:
-        #     f.write(f'Test loss: {test_loss}\n')
-        #     f.write(f'BLEU score: {score}\n')
-        #     for source_out, target_out, output_out in zip(source_outs, target_outs, output_outs):
-        #         f.write(source_out + '\n')
-        #         f.write(target_out + '\n')
-        #         f.write(output_out + '\n')
+        # Generate and print samples
+        sources, targets, outputs = self.sample()
+        source_outs = []
+        target_outs = []
+        output_outs = []
+        for source, target, output in zip(sources, targets, outputs):
+            source_out = '> ' + ' '.join(source)
+            target_out = '= ' + ' '.join(target)
+            output_out = '< ' + ' '.join(output)
 
-    # todo: broken -- fix it
+            source_outs.append(source_out)
+            target_outs.append(target_out)
+            output_outs.append(output_out)
+
+            print(source_out)
+            print(target_out)
+            print(output_out)
+
+        # Compute and print BLEU score
+        sources, targets, outputs = self.sample()
+        score = 0
+        for target, output in zip(targets, outputs):
+            # kill whitespace tokens, which crash BLEU score for some reason
+            target = ' '.join(target).split()
+            output = ' '.join(output).split()
+
+            score += bleu_score([target], [[output]])
+        score /= len(targets)
+        print(f'Average BLEU score: {score:.3f}')
+
+        # save summary data
+        path = str(self.model_path) + '.txt'
+        with open(path, 'w') as f:
+            f.write(f'Test loss: {test_loss}\n')
+            f.write(f'BLEU score: {score}\n')
+            for source_out, target_out, output_out in zip(source_outs, target_outs, output_outs):
+                f.write(source_out + '\n')
+                f.write(target_out + '\n')
+                f.write(output_out + '\n')
+
     def sample(self, num_examples: int = NUM_EXAMPLES):
         self.model.eval()
 
@@ -257,7 +255,7 @@ class Pipeline(object):
         # run model with dummy target
         sources, targets = zip(*((example.src, example.trg) for example in self.test_data[:num_examples]))
         source_tensor = self.src.process(sources).to(self.device)
-        _dummy = torch.zeros(source_tensor.shape, dtype=torch.int, device=self.device)
+        _dummy = torch.zeros(source_tensor.shape, dtype=torch.long, device=self.device)
         _dummy.fill_(self.trg.vocab[self.SOS_TOKEN])
 
         # select most likely tokens (ignoring non-word tokens)
