@@ -13,7 +13,6 @@ PAD_TOKEN = '<pad>'
 UNK_TOKEN = '<unk>'
 
 # fixed choices
-BATCH_SIZE = 32
 MIN_FREQ = 2
 NUM_SAMPLES = 4
 CLIP = 1
@@ -23,12 +22,13 @@ MODELS_ROOT = PROJ_ROOT / 'models'
 @click.command()
 @click.option('--num_epochs', '-e', default=10, type=int, help='Number of epochs')
 @click.option('--max_examples', '-n', default=50_000, type=int, help='Max number of training examples')
+@click.option('--batch_size', '-b', default=32, type=int, help='Batch size')
 @click.option('--embed_dim', '-d', default='50', type=Choice(['50', '100', '200', '300']), help='Embedding dimension')
 @click.option('--trg_vocab', '-t', default=2_000, type=int, help='Max target vocabulary size')
 @click.option('--rnn_units', '-r', default=100, type=int, help='Number of RNN units')
 @click.option('--attn_units', '-a', default=100, type=int, help='Number of attention units')
 @click.option('--dropout', '-p', default=0.3, type=float, help='Dropout probability')
-def main(num_epochs: int, max_examples: int,
+def main(num_epochs: int, max_examples: int, batch_size: int,
          embed_dim: str, trg_vocab: int,
          rnn_units: int, attn_units: int,
          dropout: float) -> None:
@@ -48,7 +48,7 @@ def main(num_epochs: int, max_examples: int,
     print(f'Target vocabulary size: {trg_vocab_size}')
 
     # prepare data
-    pipeline.prepare_data(BATCH_SIZE)
+    pipeline.prepare_data(batch_size)
 
     # build model and prepare optimizer and loss
     print('Building model')

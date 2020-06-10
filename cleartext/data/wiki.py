@@ -1,7 +1,6 @@
 import io
 import os
 import tarfile
-from pathlib import Path
 from typing import Tuple
 
 from torchtext.data import Example, Field
