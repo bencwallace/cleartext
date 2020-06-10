@@ -1,13 +1,6 @@
 .idea/
-.vector_cache/
 __pycache__/
-cleartext.egg_info/
+/cleartext.egg-info/
 
 data/*
-data/raw/*
-!data/raw/.gitkeep
-
-# temporarily
-scripts/
-
-/cleartext.egg-info/
+vectors/*

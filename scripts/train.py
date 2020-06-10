@@ -61,7 +61,7 @@ def main(num_epochs: int, max_examples: int,
 
     # load embeddings and build vocabulary
     print(f'Loading {embed_dim}-dimensional GloVe vectors')
-    vectors_path = PROJ_ROOT / '.vector_cache'
+    vectors_path = PROJ_ROOT / 'vectors' / 'glove'
     glove = f'glove.6B.{embed_dim}d'
     vocab_args = {'min_freq': MIN_FREQ, 'vectors': glove, 'vectors_cache': vectors_path}
     src.build_vocab(train_data, **vocab_args)
@@ -105,12 +105,15 @@ def main(num_epochs: int, max_examples: int,
         utils.print_loss(valid_loss, 'Valid')
 
     # run tests
-    test(model, src, trg, test_iter, criterion)
+    test(model, test_iter, criterion)
     print_samples(device, model, src, trg, test_data, NUM_SAMPLES)
 
 
 def finalize(device, model, src, trg, test_data, test_iter, criterion, num_examples):
-    test(model, src, trg, test_iter, criterion)
+    def exit(_signal, _frame):
+        sys.exit(0)
+    signal.signal(signal.SIGINT, exit)
+    test(model, test_iter, criterion)
     print_samples(device, model, src, trg, test_data, num_examples)
 
 
@@ -145,7 +148,6 @@ def sample(device, model, src, trg, test_data, num_examples):
 
     # select most likely tokens (ignoring non-word tokens)
     output = model(source_tensor, dummy, 0)[1:]
-    # todo: vectorize masking
     for i in map(trg.vocab.stoi.get, [SOS_TOKEN, UNK_TOKEN, PAD_TOKEN]):
         output.data[:, :, i] = 0
     output = output.argmax(dim=2)
@@ -165,7 +167,7 @@ def sample(device, model, src, trg, test_data, num_examples):
     return sources, targets, trimmed
 
 
-def test(model: Module, src: Field, trg: Field, test_iter: Iterator, criterion: Module):
+def test(model: Module, test_iter: Iterator, criterion: Module):
     print('\nTesting model')
     test_loss = utils.eval_step(model, test_iter, criterion)
     # todo: use print_loss

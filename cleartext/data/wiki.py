@@ -11,10 +11,8 @@ from cleartext import PROJ_ROOT
 
 
 class WikiSL(TranslationDataset):
-    # todo: add alternative url
     urls = ['https://raw.githubusercontent.com/louismartin/dress-data/master/data-simplification.tar.bz2']
 
-    # needed in order to deal with .tar.bz2 files
     @classmethod
     def splits(cls, fields: Tuple[Field, Field], **kwargs):
         exts = ('.src', '.dst')
@@ -42,7 +40,7 @@ class WikiSL(TranslationDataset):
         return super().splits(exts, fields, path=path, root=root, train=train, validation=valid, test=test, **kwargs)
 
     # needed in order to limit number of examples
-    def __init__(self, path: Path, exts: Tuple[str, str], fields: Tuple[Field, Field], **kwargs) -> None:
+    def __init__(self, path: str, exts: Tuple[str, str], fields: Tuple[Field, Field], **kwargs) -> None:
         if not isinstance(fields[0], (tuple, list)):
             fields = [('src', fields[0]), ('trg', fields[1])]
 
@@ -66,7 +64,7 @@ class WikiSL(TranslationDataset):
 
 class WikiSmall(WikiSL):
     name = ''
-    dir_name = 'wikismall'     # kludge
+    dir_name = 'wikismall'
     dirname = ''
     prefix = 'PWKP_108016.tag.80.aner.ori'
 
