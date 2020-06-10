@@ -145,7 +145,7 @@ class Pipeline(object):
         return trainable, total
 
     def train(self, num_epochs: int):
-        # signal.signal(signal.SIGINT, self._finalize)
+        signal.signal(signal.SIGINT, self._finalize)
         best_valid_loss = float('inf')
         train_hist = [best_valid_loss, best_valid_loss]
         valid_hist = [best_valid_loss, best_valid_loss]
@@ -201,6 +201,8 @@ class Pipeline(object):
         signal.signal(signal.SIGINT, default_handler)
 
         self.print_diagnostics()
+        # todo: sys.exit not ideal -- we may want to continue hyperparameter search
+        sys.exit(0)
 
     def print_diagnostics(self):
         # Compute and print test loss
@@ -255,6 +257,7 @@ class Pipeline(object):
         # run model with dummy target
         sources, targets = zip(*((example.src, example.trg) for example in self.test_data[:num_examples]))
         source_tensor = self.src.process(sources).to(self.device)
+        print(source_tensor.shape)
         _dummy = torch.zeros(source_tensor.shape, dtype=torch.long, device=self.device)
         _dummy.fill_(self.trg.vocab[self.SOS_TOKEN])
 
