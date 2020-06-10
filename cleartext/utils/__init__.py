@@ -1,5 +1,5 @@
 from .utils import count_parameters, format_time, init_weights, preprocess, print_loss, seq_to_sentence
-from .steps import eval_step, train_step
+from .run import eval_step, train_step
 
 __all__ = ['init_weights',
            'format_time',

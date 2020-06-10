@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import click
-import math
 import signal
 import sys
 import time
@@ -9,8 +8,7 @@ from click import Choice
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.nn import Module
-from torchtext.data import BucketIterator, Field, Iterator
+from torchtext.data import BucketIterator, Field
 from torchtext.data.metrics import bleu_score
 
 import cleartext.utils as utils
@@ -20,6 +18,8 @@ from cleartext.models import EncoderDecoder
 
 
 # arbitrary choices
+from utils.run import sample
+
 EOS_TOKEN = '<eos>'
 SOS_TOKEN = '<sos>'
 PAD_TOKEN = '<pad>'
@@ -104,74 +104,41 @@ def main(num_epochs: int, max_examples: int,
         utils.print_loss(train_loss, 'Train')
         utils.print_loss(valid_loss, 'Valid')
 
-    # run tests
-    test(model, test_iter, criterion)
-    print_samples(device, model, src, trg, test_data, NUM_SAMPLES)
+    finalize(device, model, src, trg, test_data, test_iter, criterion, NUM_SAMPLES)
 
 
 def finalize(device, model, src, trg, test_data, test_iter, criterion, num_examples):
     def exit(_signal, _frame):
         sys.exit(0)
     signal.signal(signal.SIGINT, exit)
-    test(model, test_iter, criterion)
-    print_samples(device, model, src, trg, test_data, num_examples)
+    print_diagnostics(device, model, criterion, src, trg, test_data, test_iter, num_examples)
 
 
-def print_samples(device, model, src, trg, test_data, num_examples):
-    sources, targets, outputs = sample(device, model, src, trg, test_data, num_examples)
+def print_diagnostics(device, model, criterion, src, trg, test_data, test_iter, num_examples):
+    # Compute and print test loss
+    print('\nTesting model')
+    test_loss = utils.eval_step(model, test_iter, criterion)
+    utils.print_loss(test_loss, 'Test')
+
+    # Generate and print sample translations
+    ignore_tokens = [SOS_TOKEN, UNK_TOKEN, PAD_TOKEN]
+    sources, targets, outputs = sample(device, model, src, trg, test_data, num_examples, ignore_tokens)
     for source, target, output in zip(sources, targets, outputs):
         print('> ', ' '.join(source))
         print('= ', ' '.join(target))
         print('< ', ' '.join(output))
 
-    # compute bleu score
-    sources, targets, outputs = sample(device, model, src, trg, test_data, len(test_data))
+    # Compute and print BLEU score
+    sources, targets, outputs = sample(device, model, src, trg, test_data, len(test_data), ignore_tokens)
     score = 0
     for target, output in zip(targets, outputs):
-        # space tokens kill bleu score for some reason
+        # kill whitespace tokens, which crash bleu_score for some reason
         target = ' '.join(target).split()
         output = ' '.join(output).split()
+
         score += bleu_score([target], [[output]])
     score /= len(targets)
-    print(f'Avg BLEU score: {score:.3f}')
-
-
-def sample(device, model, src, trg, test_data, num_examples):
-    model.eval()
-    # todo: randomize examples
-    sources, targets = zip(*((example.src, example.trg) for example in test_data[:num_examples]))
-
-    # run model with dummy target
-    source_tensor = src.process(sources).to(device)
-    dummy = torch.zeros(source_tensor.shape, dtype=int, device=device)
-    dummy.fill_(trg.vocab[SOS_TOKEN])
-
-    # select most likely tokens (ignoring non-word tokens)
-    output = model(source_tensor, dummy, 0)[1:]
-    for i in map(trg.vocab.stoi.get, [SOS_TOKEN, UNK_TOKEN, PAD_TOKEN]):
-        output.data[:, :, i] = 0
-    output = output.argmax(dim=2)
-
-    # trim past eos token and denumericalize
-    output = output.T.tolist()
-    trimmed = []
-    for out in output:
-        try:
-            eos_index = out.index(trg.vocab[EOS_TOKEN])
-        except ValueError:
-            eos_index = len(out)
-        out = out[:eos_index]
-        out = list(map(lambda i: trg.vocab.itos[i], out))
-        trimmed.append(out)
-
-    return sources, targets, trimmed
-
-
-def test(model: Module, test_iter: Iterator, criterion: Module):
-    print('\nTesting model')
-    test_loss = utils.eval_step(model, test_iter, criterion)
-    # todo: use print_loss
-    print(f'Test loss: {test_loss:.3f} | Test perplexity: {math.exp(test_loss):7.3f}')
+    print(f'Average BLEU score: {score:.3f}')
 
 
 if __name__ == '__main__':
