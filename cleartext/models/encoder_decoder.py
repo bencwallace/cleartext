@@ -36,7 +36,7 @@ class Attention(nn.Module):
         self.fc = nn.Linear(self.attn_in, units)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, dec_state: Tensor, enc_outputs: Tensor) -> None:
+    def forward(self, dec_state: Tensor, enc_outputs: Tensor) -> Tensor:
         source_len = enc_outputs.shape[0]
 
         # vectorize computation of Bahdanau attention scores for all encoder outputs
@@ -53,20 +53,18 @@ class Attention(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, embed_weights: Tensor, units: int, dropout: float, attention: Attention) -> None:
+    def __init__(self, embed_weights: Tensor, units: int, context_size: int, dropout: float) -> None:
         super().__init__()
         self.embedding = nn.Embedding.from_pretrained(embed_weights)
         self.vocab_size, embed_dim = embed_weights.shape
         self.rnn = nn.GRU((units * 2) + embed_dim, units)
-        self.fc = nn.Linear(attention.attn_in + embed_dim, self.vocab_size)
+        self.fc = nn.Linear(units + context_size + embed_dim, self.vocab_size)
         self.dropout = nn.Dropout(dropout)
-        self.attention = attention
 
-    def forward(self, token: Tensor, dec_state: Tensor, enc_outputs: Tensor) -> Tuple[Tensor, Tensor]:
+    def forward(self, token: Tensor, dec_state: Tensor, context) -> Tuple[Tensor, Tensor]:
         token = token.unsqueeze(0)
         embedded = self.embedding(token)
 
-        context = self._compute_context(dec_state, enc_outputs)
         rnn_input = torch.cat((embedded, context), dim=2)
         output, dec_state = self.rnn(rnn_input, dec_state.unsqueeze(0))
 
@@ -82,15 +80,6 @@ class Decoder(nn.Module):
         # return logits (rather than softmax activations) for compatibility with cross-entropy loss
         return output, dec_state.squeeze(0)
 
-    def _compute_context(self, dec_state: Tensor, enc_outputs: Tensor) -> Tensor:
-        weights = self.attention(dec_state, enc_outputs)
-        weights = weights.unsqueeze(1)
-
-        enc_outputs = enc_outputs.permute(1, 0, 2)
-        context = torch.bmm(weights, enc_outputs)
-        context = context.permute(1, 0, 2)
-        return context
-
 
 class EncoderDecoder(nn.Module):
     def __init__(self, device: torch.device,
@@ -100,23 +89,28 @@ class EncoderDecoder(nn.Module):
         super().__init__()
         self.encoder = Encoder(embed_weights_src, rnn_units, dropout)
         self.attention = Attention(rnn_units, attn_units)
-        self.decoder = Decoder(embed_weights_trg, rnn_units, dropout, self.attention)
+        self.decoder = Decoder(embed_weights_trg, rnn_units, 2 * rnn_units, dropout)
 
         self.device = device
         self.target_vocab_size = self.decoder.vocab_size
 
     def forward(self, source: Tensor, target: Tensor, teacher_forcing: float = 0.5) -> Tensor:
         batch_size = source.shape[1]
-        # todo: change max_len?
         max_len = target.shape[0]
         enc_outputs, state = self.encoder(source)
 
         outputs = torch.zeros(max_len, batch_size, self.target_vocab_size).to(self.device)
         out = target[0, :]
         for t in range(1, max_len):
-            out, state = self.decoder(out, state, enc_outputs)
+            context = self._compute_context(state, enc_outputs)
+            out, state = self.decoder(out, state, context)
             outputs[t] = out
             teacher_force = random.random() < teacher_forcing
             out = (target[t] if teacher_force else out.max(1)[1])
 
         return outputs
+
+    def _compute_context(self, dec_state, enc_outputs):
+        weights = self.attention(dec_state, enc_outputs).unsqueeze(1)
+        enc_outputs = enc_outputs.permute(1, 0, 2)
+        return torch.bmm(weights, enc_outputs).permute(1, 0, 2)
