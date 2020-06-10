@@ -41,11 +41,14 @@ def main(num_epochs: int, max_examples: int,
     train_len, _, _ = pipeline.load_data(WikiSmall, max_examples)
     print(f'Loaded {train_len} training examples')
 
-    # load embeddings, build vocabulary, and batch data
+    # load embeddings
     print(f'Loading {embed_dim}-dimensional GloVe vectors')
-    src_vocab_size, trg_vocab_size = pipeline.prepare_data(embed_dim, trg_vocab, BATCH_SIZE)
+    src_vocab_size, trg_vocab_size = pipeline.load_vectors(embed_dim, trg_vocab)
     print(f'Source vocabulary size: {src_vocab_size}')
     print(f'Target vocabulary size: {trg_vocab_size}')
+
+    # prepare data
+    pipeline.prepare_data(BATCH_SIZE)
 
     # build model and prepare optimizer and loss
     print('Building model')

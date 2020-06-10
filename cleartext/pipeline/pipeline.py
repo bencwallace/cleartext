@@ -1,7 +1,8 @@
-import pathlib
 import signal
 import sys
 import time
+from pathlib import Path
+from typing import Union
 
 import torch
 import torch.nn as nn
@@ -28,16 +29,37 @@ class Pipeline(object):
     MODELS_ROOT = PROJ_ROOT / 'models'
 
     @classmethod
-    def deserialize(cls):
-        # todo
-        pass
+    def deserialize(cls, device, path: Union[str, Path], name: str =None):
+        pl_dict = torch.load(path)
+        if name is None:
+            name = pl_dict['name']
+        pipeline = cls(name)
 
-    def __init__(self, name='pl'):
+        # load preprocessing
+        pipeline.src = torch.load(path / 'src.pt')
+        pipeline.trg = torch.load(path / 'trg.pt')
+
+        # build model
+        if str(pl_dict['device']) == 'cuda':
+            if str(device) == 'cuda':
+                pass
+
+        return pipeline
+
+
+    def __init__(self, name: str = 'pl'):
         self.name = name
         (self.MODELS_ROOT / name).mkdir(exist_ok=True)
         self.root = self.MODELS_ROOT / name
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model_index = 0
+
+        # todo: decouple data and preprocessing
+        self.dataset_cls = None
+        self.max_examples = None
+        self.embed_dim = None
+        self.trg_vocab = None
+        self.batch_size = None
 
         self.src = None
         self.trg = None
@@ -55,11 +77,9 @@ class Pipeline(object):
         self.optimizer = None
         self.criterion = None
 
-    def load_data(self, dataset_cls, max_examples):
-        # reset iterators to force client to run `prepare_data`
-        self.train_iter = None
-        self.valid_iter = None
-        self.test_iter = None
+    def load_data(self, dataset_cls: type, max_examples: int):
+        self.dataset_cls = dataset_cls
+        self.max_examples = max_examples
 
         field_args = {
             'tokenize': 'spacy', 'tokenizer_language': 'en_core_web_sm',
@@ -67,37 +87,34 @@ class Pipeline(object):
             'pad_token': self.PAD_TOKEN, 'unk_token': self.UNK_TOKEN,
             'lower': True, 'preprocessing': utils.preprocess
         }
-        self.src = Field(**field_args)
-        self.trg = Field(**field_args)
+        if self.src is None:
+            self.src = Field(**field_args)
+        if self.trg is None:
+            self.trg = Field(**field_args)
 
         data = dataset_cls.splits(fields=(self.src, self.trg), max_examples=max_examples)
         self.train_data, self.valid_data, self.test_data = data
 
         return list(map(len, data))
 
-    def prepare_data(self, embed_dim, trg_vocab, batch_size):
-        # reset model, optimizer, and loss to force client to run `build_model`
-        self.model_index = 0
-        self.model_path = None
-        self.model = None
-
+    def load_vectors(self, embed_dim: str, trg_vocab: int):
         vectors_dir = self.VECTORS_ROOT / 'glove'
         vectors_path = f'glove.6B.{embed_dim}d'
         vocab_args = {'min_freq': self.MIN_FREQ, 'vectors': vectors_path, 'vectors_cache': vectors_dir}
         self.src.build_vocab(self.train_data, **vocab_args)
         self.trg.build_vocab(self.train_data, max_size=trg_vocab, **vocab_args)
+        return len(self.src.vocab), len(self.trg.vocab)
 
+    def prepare_data(self, batch_size: int):
         # todo: check if necessary that serialization depend on `embed_dim`
-        torch.save(self.src, self.root / f'src-{embed_dim}d.pt')
-        torch.save(self.trg, self.root / f'trg-{embed_dim}d-{trg_vocab}')
+        torch.save(self.src, self.root / f'src.pt')
+        torch.save(self.trg, self.root / f'trg.pt')
 
         iterators = BucketIterator.splits((self.train_data, self.valid_data, self.test_data),
                                           batch_size=batch_size, device=self.device)
         self.train_iter, self.valid_iter, self.test_iter = iterators
 
-        return len(self.src.vocab), len(self.trg.vocab)
-
-    def build_model(self, rnn_units, attn_units, dropout):
+    def build_model(self, rnn_units: int, attn_units: int, dropout: float):
         self.model_index += 1
         self.model_path = self.root / f'model{self.model_index:02}.pt'
         self.model = EncoderDecoder(self.device, self.src.vocab.vectors, self.trg.vocab.vectors,
@@ -110,7 +127,8 @@ class Pipeline(object):
 
         return trainable, total
 
-    def train(self, num_epochs):
+    def train(self, num_epochs: int):
+        # signal.signal(signal.SIGINT, self._finalize)
         best_valid_loss = float('inf')
         train_hist = [best_valid_loss, best_valid_loss]
         valid_hist = [best_valid_loss, best_valid_loss]
@@ -135,6 +153,11 @@ class Pipeline(object):
             if valid_loss < best_valid_loss:
                 best_valid_loss = valid_loss
                 torch.save({
+                    'name': self.name,
+                    'device': self.device,
+                    'embed_dim': self.embed_dim,
+                    'trg_vocab': self.trg_vocab,
+                    'batch_size': self.batch_size,
                     'epoch': epoch,
                     'epoch_start': start_time,
                     'epoch_end': end_time,
@@ -149,7 +172,7 @@ class Pipeline(object):
         else:
             self._finalize()
 
-    def _finalize(self):
+    def _finalize(self, _signal=None, _frame=None):
         # reset default signal handler
         def default_handler(_signal, _frame):
             sys.exit(0)
@@ -203,7 +226,7 @@ class Pipeline(object):
                 f.write(target_out + '\n')
                 f.write(output_out + '\n')
 
-    def sample(self, num_examples=NUM_EXAMPLES):
+    def sample(self, num_examples: int = NUM_EXAMPLES):
         self.model.eval()
 
         # todo: randomize examples
