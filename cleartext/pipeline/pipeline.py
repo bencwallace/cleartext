@@ -29,32 +29,41 @@ class Pipeline(object):
     MODELS_ROOT = PROJ_ROOT / 'models'
 
     @classmethod
-    def deserialize(cls, device, path: Union[str, Path], name: str =None):
-        pl_dict = torch.load(path)
-        if name is None:
-            name = pl_dict['name']
+    def deserialize(cls, path: Union[str, Path], index=1):
+        # todo: accomodate saving/loading on different devices
+        device = utils.get_device()
+
+        path = Path(path)
+        pl_dict = torch.load(path / f'model{index:02}.pt')
+        name = pl_dict['name']
         pipeline = cls(name)
 
         # load preprocessing
         pipeline.src = torch.load(path / 'src.pt')
         pipeline.trg = torch.load(path / 'trg.pt')
 
-        # build model
-        if str(pl_dict['device']) == 'cuda':
-            if str(device) == 'cuda':
-                pass
+        # load model
+        pipeline.model = EncoderDecoder(device, pipeline.src.vocab.vectors, pipeline.trg.vocab.vectors,
+                                        pl_dict['rnn_units'], pl_dict['attn_units'], pl_dict['dropout'])
+        pipeline.model.load_state_dict(pl_dict['model_state_dict'])
+
+        # load optimizer
+        pipeline.optimizer = optim.Adam(pipeline.model.parameters())
+        pipeline.optimizer.load_state_dict(pl_dict['optimizer_state_dict'])
+
+        # load loss
+        pipeline.criterion = nn.CrossEntropyLoss(ignore_index=pipeline.trg.vocab.stoi[cls.PAD_TOKEN])
+        pipeline.criterion.load_state_dict(pl_dict['loss_state_dict'])
 
         return pipeline
-
 
     def __init__(self, name: str = 'pl'):
         self.name = name
         (self.MODELS_ROOT / name).mkdir(exist_ok=True)
         self.root = self.MODELS_ROOT / name
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = utils.get_device()
         self.model_index = 0
 
-        # todo: decouple data and preprocessing
         self.dataset_cls = None
         self.max_examples = None
         self.embed_dim = None
@@ -71,6 +80,10 @@ class Pipeline(object):
         self.train_iter = None
         self.valid_iter = None
         self.test_iter = None
+
+        self.rnn_units = None
+        self.attn_units = None
+        self.dropout = None
 
         self.model_path = None
         self.model = None
@@ -115,6 +128,10 @@ class Pipeline(object):
         self.train_iter, self.valid_iter, self.test_iter = iterators
 
     def build_model(self, rnn_units: int, attn_units: int, dropout: float):
+        self.rnn_units = rnn_units
+        self.attn_units = attn_units
+        self.dropout = dropout
+
         self.model_index += 1
         self.model_path = self.root / f'model{self.model_index:02}.pt'
         self.model = EncoderDecoder(self.device, self.src.vocab.vectors, self.trg.vocab.vectors,
@@ -132,19 +149,22 @@ class Pipeline(object):
         best_valid_loss = float('inf')
         train_hist = [best_valid_loss, best_valid_loss]
         valid_hist = [best_valid_loss, best_valid_loss]
+        times_hist = [0, 0]
         for epoch in range(num_epochs):
             # perform step
             start_time = time.time()
             train_loss = utils.train_step(self.model, self.train_iter, self.criterion, self.optimizer)
             valid_loss = utils.eval_step(self.model, self.valid_iter, self.criterion)
             end_time = time.time()
+            elapsed = end_time - start_time
 
             # update histories
             train_hist.append(train_loss)
             valid_hist.append(valid_loss)
+            times_hist.append(elapsed)
 
             # print epoch diagnostics
-            epoch_mins, epoch_secs = utils.format_time(start_time, end_time)
+            epoch_mins, epoch_secs = utils.format_time(elapsed)
             print(f'Epoch: {epoch + 1:02} | Time: {epoch_mins}m {epoch_secs}s')
             utils.print_loss(train_loss, 'Train')
             utils.print_loss(valid_loss, 'Valid')
@@ -158,13 +178,15 @@ class Pipeline(object):
                     'embed_dim': self.embed_dim,
                     'trg_vocab': self.trg_vocab,
                     'batch_size': self.batch_size,
-                    'epoch': epoch,
-                    'epoch_start': start_time,
-                    'epoch_end': end_time,
+                    'rnn_units': self.rnn_units,
+                    'attn_units': self.attn_units,
+                    'dropout': self.dropout,
                     'model_state_dict': self.model.state_dict(),
                     'optimizer_state_dict': self.optimizer.state_dict(),
+                    'loss_state_dict': self.criterion.state_dict(),
                     'train_hist': train_hist,
-                    'valid_hist': valid_hist
+                    'valid_hist': valid_hist,
+                    'times_hist': times_hist
                 }, self.model_path)
             elif valid_hist[-1] > valid_hist[-2] > valid_hist[-3]:
                 self._finalize()
@@ -186,46 +208,48 @@ class Pipeline(object):
         test_loss = utils.eval_step(self.model, self.test_iter, self.criterion)
         utils.print_loss(test_loss, 'Test')
 
-        # Generate and print samples
-        sources, targets, outputs = self.sample()
-        source_outs = []
-        target_outs = []
-        output_outs = []
-        for source, target, output in zip(sources, targets, outputs):
-            source_out = '> ' + ' '.join(source)
-            target_out = '= ' + ' '.join(target)
-            output_out = '< ' + ' '.join(output)
+        # todo: uncomment once `sample` is fixed
+        # # Generate and print samples
+        # sources, targets, outputs = self.sample()
+        # source_outs = []
+        # target_outs = []
+        # output_outs = []
+        # for source, target, output in zip(sources, targets, outputs):
+        #     source_out = '> ' + ' '.join(source)
+        #     target_out = '= ' + ' '.join(target)
+        #     output_out = '< ' + ' '.join(output)
+        #
+        #     source_outs.append(source_out)
+        #     target_outs.append(target_out)
+        #     output_outs.append(output_out)
+        #
+        #     print(source_out)
+        #     print(target_out)
+        #     print(output_out)
+        #
+        # # Compute and print BLEU score
+        # sources, targets, outputs = self.sample()
+        # score = 0
+        # for target, output in zip(targets, outputs):
+        #     # kill whitespace tokens, which crash BLEU score for some reason
+        #     target = ' '.join(target).split()
+        #     output = ' '.join(output).split()
+        #
+        #     score += bleu_score([target], [[output]])
+        # score /= len(targets)
+        # print(f'Average BLEU score: {score:.3f}')
+        #
+        # # save summary data
+        # path = str(self.model_path) + '.txt'
+        # with open(path, 'w') as f:
+        #     f.write(f'Test loss: {test_loss}\n')
+        #     f.write(f'BLEU score: {score}\n')
+        #     for source_out, target_out, output_out in zip(source_outs, target_outs, output_outs):
+        #         f.write(source_out + '\n')
+        #         f.write(target_out + '\n')
+        #         f.write(output_out + '\n')
 
-            source_outs.append(source_out)
-            target_outs.append(target_out)
-            output_outs.append(output_out)
-
-            print(source_out)
-            print(target_out)
-            print(output_out)
-
-        # Compute and print BLEU score
-        sources, targets, outputs = self.sample()
-        score = 0
-        for target, output in zip(targets, outputs):
-            # kill whitespace tokens, which crash BLEU score for some reason
-            target = ' '.join(target).split()
-            output = ' '.join(output).split()
-
-            score += bleu_score([target], [[output]])
-        score /= len(targets)
-        print(f'Average BLEU score: {score:.3f}')
-
-        # save summary data
-        path = str(self.model_path) + '.txt'
-        with open(path, 'w') as f:
-            f.write(f'Test loss: {test_loss}\n')
-            f.write(f'BLEU score: {score}\n')
-            for source_out, target_out, output_out in zip(source_outs, target_outs, output_outs):
-                f.write(source_out + '\n')
-                f.write(target_out + '\n')
-                f.write(output_out + '\n')
-
+    # todo: broken -- fix it
     def sample(self, num_examples: int = NUM_EXAMPLES):
         self.model.eval()
 

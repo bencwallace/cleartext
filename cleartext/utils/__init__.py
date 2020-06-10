@@ -1,4 +1,4 @@
-from .utils import count_parameters, format_time, init_weights, preprocess, print_loss, seq_to_sentence
+from .utils import count_parameters, format_time, init_weights, preprocess, print_loss, seq_to_sentence, get_device
 from .run import eval_step, train_step
 
 __all__ = ['init_weights',
@@ -6,5 +6,6 @@ __all__ = ['init_weights',
            'count_parameters',
            'seq_to_sentence',
            'preprocess',
-           'print_loss'
+           'print_loss',
+           'get_device'
            ]

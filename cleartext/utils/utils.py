@@ -3,6 +3,7 @@ import re
 import unicodedata
 from typing import Tuple
 
+import torch
 from torch import nn as nn
 from torch.nn import Module
 from torchtext.vocab import Vocab
@@ -14,8 +15,7 @@ def count_parameters(model: Module) -> Tuple[int, int]:
     return trainable, trainable + fixed
 
 
-def format_time(start: float, stop: float) -> Tuple[int, int]:
-    elapsed = stop - start
+def format_time(elapsed: float) -> Tuple[int, int]:
     mins = int(elapsed / 60)
     secs = int(elapsed - (mins * 60))
     return mins, secs
@@ -51,3 +51,7 @@ def preprocess(strings):
 
 def print_loss(loss: float, name: str = '') -> None:
     print(f'\t{name} loss:\t{loss:.3f}\t| {name} perplexity:\t{math.exp(loss):7.3f}')
+
+
+def get_device():
+    return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
