@@ -44,8 +44,9 @@ def main(num_epochs: int, max_examples: int,
          rnn_units: int, attn_units: int,
          dropout: float) -> None:
     # define register signal handler
+    filename = f'gru-{max_examples}-{embed_dim}-{trg_vocab}-{rnn_units}-{attn_units}.pt'
     def signal_handler(_signal, _frame):
-        finalize(device, model, src, trg, test_data, test_iter, criterion, NUM_SAMPLES)
+        finalize(device, model, src, trg, test_data, test_iter, criterion, NUM_SAMPLES, filename)
         sys.exit(0)
     signal.signal(signal.SIGINT, signal_handler)
 
@@ -96,6 +97,7 @@ def main(num_epochs: int, max_examples: int,
     # start training cycle -- todo: update and use checkpoints
     print(f'Training model for {num_epochs} epochs')
     best_valid_loss = float('inf')
+    valid_losses = [best_valid_loss]
     for epoch in range(num_epochs):
         start_time = time.time()
         train_loss = utils.train_step(model, train_iter, criterion, optimizer)
@@ -110,10 +112,12 @@ def main(num_epochs: int, max_examples: int,
         # save everything
         if valid_loss < best_valid_loss:
             best_valid_loss = valid_loss
-            filename = f'gru-{max_examples}-{embed_dim}-{trg_vocab}-{rnn_units}-{attn_units}.pt'
             torch.save(model, MODELS_ROOT / filename)
             with open(str(MODELS_ROOT / filename) + '.epoch', 'w') as f:
                 f.write(f'Epoch {epoch} ({epoch_mins}m {epoch_secs}s)\n')
+        elif valid_loss > valid_losses[-1] and valid_loss > valid_losses[-2]:
+            finalize(device, model, src, trg, test_data, test_iter, criterion, NUM_SAMPLES, filename)
+        valid_losses.append(valid_loss)
 
     finalize(device, model, src, trg, test_data, test_iter, criterion, NUM_SAMPLES, filename)
 
