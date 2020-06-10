@@ -138,7 +138,9 @@ def print_diagnostics(device, model, criterion, src, trg, test_data, test_iter, 
     # Generate and print sample translations
     ignore_tokens = [UNK_TOKEN, PAD_TOKEN]
     sources, targets, outputs = sample(device, model, src, trg, test_data, num_examples, SOS_TOKEN, EOS_TOKEN, ignore_tokens)
-    source_outs = target_outs = output_outs = []
+    source_outs = []
+    target_outs = []
+    output_outs = []
     for source, target, output in zip(sources, targets, outputs):
         source_out = '> ' + ' '.join(source)
         target_out = '= ' + ' '.join(target)
@@ -168,6 +170,7 @@ def print_diagnostics(device, model, criterion, src, trg, test_data, test_iter, 
         f.write(f'Test loss: {test_loss}\n')
         f.write(f'BLEU score: {score}\n')
         for source_out, target_out, output_out in zip(source_outs, target_outs, output_outs):
+            # todo: this isn't working right
             f.write(source_out + '\n')
             f.write(target_out + '\n')
             f.write(output_out + '\n')
