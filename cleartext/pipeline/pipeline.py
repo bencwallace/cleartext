@@ -116,13 +116,14 @@ class Pipeline(object):
         vocab_args = {'min_freq': self.MIN_FREQ, 'vectors': vectors_path, 'vectors_cache': vectors_dir}
         self.src.build_vocab(self.train_data, **vocab_args)
         self.trg.build_vocab(self.train_data, max_size=trg_vocab, **vocab_args)
+
+        torch.save(self.src, self.root / f'src.pt')
+        torch.save(self.trg, self.root / f'trg.pt')
+
         return len(self.src.vocab), len(self.trg.vocab)
 
     def prepare_data(self, batch_size: int):
         # todo: check if necessary that serialization depend on `embed_dim`
-        torch.save(self.src, self.root / f'src.pt')
-        torch.save(self.trg, self.root / f'trg.pt')
-
         iterators = BucketIterator.splits((self.train_data, self.valid_data, self.test_data),
                                           batch_size=batch_size, device=self.device)
         self.train_iter, self.valid_iter, self.test_iter = iterators

@@ -20,6 +20,7 @@ MODELS_ROOT = PROJ_ROOT / 'models'
 
 
 @click.command()
+@click.argument('name', default='pl', type=str)
 @click.option('--num_epochs', '-e', default=10, type=int, help='Number of epochs')
 @click.option('--max_examples', '-n', default=50_000, type=int, help='Max number of training examples')
 @click.option('--batch_size', '-b', default=32, type=int, help='Batch size')
@@ -28,12 +29,13 @@ MODELS_ROOT = PROJ_ROOT / 'models'
 @click.option('--rnn_units', '-r', default=100, type=int, help='Number of RNN units')
 @click.option('--attn_units', '-a', default=100, type=int, help='Number of attention units')
 @click.option('--dropout', '-p', default=0.3, type=float, help='Dropout probability')
-def main(num_epochs: int, max_examples: int, batch_size: int,
+def main(name: str,
+         num_epochs: int, max_examples: int, batch_size: int,
          embed_dim: str, trg_vocab: int,
          rnn_units: int, attn_units: int,
          dropout: float) -> None:
     # initialize pipeline
-    pipeline = Pipeline()
+    pipeline = Pipeline(name)
     print(f'Using {pipeline.device}')
 
     # load data
