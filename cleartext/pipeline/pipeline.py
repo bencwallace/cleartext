@@ -23,7 +23,7 @@ class Pipeline(object):
     UNK_TOKEN = '<unk>'
 
     MIN_FREQ = 2
-    NUM_EXAMPLES = 4
+    NUM_EXAMPLES = 10
 
     VECTORS_ROOT = PROJ_ROOT / 'vectors'
     MODELS_ROOT = PROJ_ROOT / 'models'
@@ -112,7 +112,7 @@ class Pipeline(object):
         data = dataset_cls.splits(fields=(self.src, self.trg), max_examples=max_examples)
         self.train_data, self.valid_data, self.test_data = data
 
-        return list(map(len, data))
+        return [len(dataset) for dataset in data]
 
     def load_vectors(self, embed_dim: str, trg_vocab: int):
         vectors_dir = self.VECTORS_ROOT / 'glove'
@@ -206,85 +206,52 @@ class Pipeline(object):
         signal.signal(signal.SIGINT, default_handler)
 
         self.print_diagnostics()
-        # todo: sys.exit not ideal -- we may want to continue hyperparameter search
-        sys.exit(0)
 
-    def print_diagnostics(self):
+    def print_diagnostics(self, beam_size: int = 10, max_len: int = 30, num_examples: int = NUM_EXAMPLES):
         # Compute and print test loss
         print('\nTesting model')
         test_loss = utils.eval_step(self.model, self.test_iter, self.criterion)
         utils.print_loss(test_loss, 'Test')
 
         # Generate and print samples
-        sources, targets, outputs = self.sample()
-        source_outs = []
-        target_outs = []
-        output_outs = []
-        for source, target, output in zip(sources, targets, outputs):
-            source_out = '> ' + ' '.join(source)
-            target_out = '= ' + ' '.join(target)
-            output_out = '< ' + ' '.join(output)
+        examples = self.test_data[:num_examples]
+        sources, targets = zip(*((e.src, e.trg) for e in self.test_data))
+        outputs = [self.beam_search(s, beam_size, max_len) for s in sources]
+        source_print = []
+        target_print = []
+        output_print = []
+        for i in range(num_examples):
+            source_out = '> ' + ' '.join(sources[i])
+            target_out = '= ' + ' '.join(targets[i])
+            output_out = '< ' + ' '.join(outputs[i])
 
-            source_outs.append(source_out)
-            target_outs.append(target_out)
-            output_outs.append(output_out)
+            source_print.append(source_out)
+            target_print.append(target_out)
+            output_print.append(output_out)
 
             print(source_out)
             print(target_out)
             print(output_out)
 
         # Compute and print BLEU score
-        sources, targets, outputs = self.sample()
-        score = 0
+        bleu = 0
         for target, output in zip(targets, outputs):
             # kill whitespace tokens, which crash BLEU score for some reason
             target = ' '.join(target).split()
             output = ' '.join(output).split()
-
-            score += bleu_score([target], [[output]])
-        score /= len(targets)
-        print(f'Average BLEU score: {score:.3f}')
+            bleu += bleu_score([target], [[output]])
+        bleu /= len(targets)
+        print(f'Average BLEU score: {bleu:.3f}')
 
         # save summary data
         path = str(self.model_path) + '.txt'
         with open(path, 'w') as f:
             f.write(f'Test loss: {test_loss}\n')
-            f.write(f'BLEU score: {score}\n')
-            for source_out, target_out, output_out in zip(source_outs, target_outs, output_outs):
+            f.write(f'BLEU score: {bleu}\n')
+            for source_out, target_out, output_out in zip(source_print, target_print, output_print):
                 f.write(source_out + '\n')
                 f.write(target_out + '\n')
                 f.write(output_out + '\n')
-
-    def sample(self, num_examples: int = NUM_EXAMPLES):
-        self.model.eval()
-
-        # todo: randomize examples
-        # run model with dummy target
-        sources, targets = zip(*((example.src, example.trg) for example in self.test_data[:num_examples]))
-        source_tensor = self.src.process(sources).to(self.device)
-        _dummy = torch.zeros(source_tensor.shape, dtype=torch.long, device=self.device)
-        _dummy.fill_(self.trg.vocab[self.SOS_TOKEN])
-
-        # select most likely tokens (ignoring non-word tokens)
-        output = self.model(source_tensor, _dummy, 0)[1:]
-        ignore_indices = map(self.trg.vocab.stoi.get, [self.SOS_TOKEN, self.UNK_TOKEN, self.PAD_TOKEN])
-        for i in ignore_indices:
-            output.data[:, :, i] = 0
-        output = output.argmax(dim=2)
-
-        # trim past eos token and denumericalize
-        output = output.T.tolist()
-        trimmed = []
-        for out in output:
-            try:
-                eos_index = out.index(self.trg.vocab[self.EOS_TOKEN])
-            except ValueError:
-                eos_index = len(out)
-            out = out[:eos_index]
-            out = list(map(lambda i: self.trg.vocab.itos[i], out))
-            trimmed.append(out)
-
-        return sources, targets, trimmed
 
     def beam_search(self, source, beam_size: int, max_len: int, alpha: float = 1):
         """
@@ -322,5 +289,5 @@ class Pipeline(object):
         winner_len = lengths[idx]
         winner = output_tensor[:winner_len, idx]
 
-        result = list(map(lambda d: self.trg.vocab.itos[d], winner))
+        result = [self.trg.vocab.itos[d] for d in winner]
         return result
