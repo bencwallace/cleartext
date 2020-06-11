@@ -67,8 +67,6 @@ class Attention(nn.Module):
         source_len = enc_outputs.shape[0]
 
         # vectorize computation of Bahdanau attention scores for all encoder outputs
-        print('Decoder state shape: ', dec_state.shape)
-        input()
         dec_state = dec_state.unsqueeze(1).repeat(1, source_len, 1)
         enc_outputs = enc_outputs.permute(1, 0, 2)
         combined = torch.cat((dec_state, enc_outputs), dim=2)
@@ -188,23 +186,53 @@ class EncoderDecoder(nn.Module):
         # run encoder
         enc_outputs, state = self.encoder(source)
 
-        # infer distribution over first word
+        # run decoder to predict distribution over first word
         context = self._compute_context(state, enc_outputs)
         token = torch.Tensor(batch_size)
         token.fill_(trg_sos)                                                    # (batch_size,)
         out, state = self.decoder(token, state, context)                        # (batch_size, vocab_size), (batch_size, dec_units)
-        probs, tokens = torch.topk(out, beam_size, dim=1)                       # (batch_size, beam_size), (batch_size, beam_size)
-        scores = -torch.log(probs)                                              # (batch_size, beam_size)
-        sequences = tokens.squeeze(1)                                           # (batch_size, seq_len=1, beam_size)
 
-        # beam search main loop
+        # initialize scores, sequences, and states
+        scores, sequences = torch.topk(out, beam_size, dim=1)                   # (batch_size, beam_size)
+        scores = torch.log(scores)                                              # (batch_size, beam_size)
+        sequences = sequences.squeeze(1)                                        # (batch_size, seq_len=1, beam_size)
+        states = torch.Tensor(beam_size)
+        states.fill_(state)
+
+        # beam search main loop -- generate new sequences and scores
         for t in range(max_len):
-            context = self._compute_context(state, enc_outputs)
-            for seq in sequences.permute(2, 0, 1):                              # (batch_size, seq_len)
+            all_scores = torch.Tensor()
+            for i, seq in enumerate(sequences.permute(2, 0, 1)):                # (batch_size, seq_len)
+                # run decoder
+                context = self._compute_context(states[i], enc_outputs)
                 token = seq[:, -1]                                              # (batch_size,)
-                out, state = self.decoder(token, state, context)
-                probs, tokens = torch.topk(out, beam_size, dim=1)
-                # todo
+                out, states[i] = self.decoder(token, states[i], context)
+
+                # update scores
+                curr_scores = scores[:, i]                                      # (batch_size,)
+                all_scores = torch.cat((all_scores, curr_scores - torch.log(out)))
+            # at this point, all_scores has shape (batch_size, beam_size * vocab_size)
+
+            # search for top scores and sequences
+            top_scores, indices = torch.topk(all_scores, beam_size, dim=1)      # (batch_size, beam_size)
+            new_sequences = torch.Tensor()
+            scores = torch.Tensor()
+            for idx, score in zip(indices, top_scores):                         # (batch_size,)     ???
+                # convert idx into corresponding sequence and additional token
+                seq_index = idx // self.target_vocab_size                       # (batch_size,)
+                vocab_index = idx % self.target_vocab_size
+
+                # update sequences
+                new_seq = torch.cat((sequences[:, :, seq_index], torch.Tensor([vocab_index])), dim=1)  # (batch_size, seq_len+1)
+                new_sequences = torch.cat((new_sequences, new_seq), dim=2)      # (batch_size, seq_len+1, i<beam_size)
+
+                # update scores
+                score = score.unsqueeze(1)                                      # (batch_size, 1)
+                scores = torch.cat((scores, score), dim=1)                      # (batch_size, i)
+            sequences = new_sequences
+
+        # re-check:
+        return sequences[torch.argmax(scores, dim=1)]
 
     def _compute_context(self, dec_state, enc_outputs):
         """
