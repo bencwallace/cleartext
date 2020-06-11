@@ -191,7 +191,7 @@ class EncoderDecoder(nn.Module):
 
         # initialize distribution over first word
         context = self._compute_context(state, enc_outputs)
-        token = torch.LongTensor(batch_size)
+        token = torch.LongTensor(batch_size).to(self.device)
         token.fill_(trg_sos)                                                    # (batch_size,)
         out, state = self.decoder(token, state, context)                        # (batch_size, vocab_size)
         vocab_size = out.shape[1]                                               # (batch_size, dec_units)
@@ -205,7 +205,7 @@ class EncoderDecoder(nn.Module):
         # main loop over time steps
         for t in range(max_len):
             # generate scores for next time step -- todo: vectorize (requires modifying _compute_context)
-            all_scores = torch.Tensor()
+            all_scores = torch.Tensor().to(self.device)
             for i, seq in enumerate(sequences.permute(2, 0, 1)):                # (seq_len, batch_size)
                 # run decoder
                 context = self._compute_context(states[:, i], enc_outputs)
@@ -221,8 +221,8 @@ class EncoderDecoder(nn.Module):
             top_scores, indices = torch.topk(all_scores, beam_size, dim=1)      # (batch_size, beam_size)
 
             # create placeholder for new sequences and scores
-            new_sequences = torch.LongTensor()
-            scores = torch.Tensor()
+            new_sequences = torch.LongTensor().to(self.device)
+            scores = torch.Tensor().to(self.device)
             # loop through `beam_size` number of candidates and build each one
             for idx, score in zip(indices.permute(1, 0), top_scores.permute(1, 0)):
                 # convert idx into corresponding sequence and additional token (notice all_scores.shape above)
