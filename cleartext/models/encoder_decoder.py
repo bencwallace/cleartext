@@ -65,9 +65,10 @@ class Attention(nn.Module):
             Attention weights of shape (batch_size, source_len)
         """
         source_len = enc_outputs.shape[0]
-        batch_size = enc_outputs.shape[1]
 
         # vectorize computation of Bahdanau attention scores for all encoder outputs
+        print('Decoder state shape: ', dec_state.shape)
+        input()
         dec_state = dec_state.unsqueeze(1).repeat(1, source_len, 1)
         enc_outputs = enc_outputs.permute(1, 0, 2)
         combined = torch.cat((dec_state, enc_outputs), dim=2)
@@ -122,7 +123,7 @@ class Decoder(nn.Module):
         output = self.fc(combined)
 
         # return logits (rather than softmax activations) for compatibility with cross-entropy loss
-        dec_state = dec_state.unsqueezed(0)
+        dec_state = dec_state.unsqueeze(0)
         return output, dec_state
 
 
@@ -172,6 +173,38 @@ class EncoderDecoder(nn.Module):
             out = (target[t] if teacher_force else out.max(1)[1])
 
         return outputs
+
+    # todo: extend to batches
+    def beam_search_decode(self, source: Tensor, beam_size: int, trg_sos: int, max_len: int) -> Tensor:
+        """
+        :param source: Tensor
+            Source sequence of shape (src_len, batch_size)
+        :param beam_size: int
+        :param trg_sos: int
+        :param max_len: int
+        :return:
+        """
+        batch_size = source.shape[1]
+        # run encoder
+        enc_outputs, state = self.encoder(source)
+
+        # infer distribution over first word
+        context = self._compute_context(state, enc_outputs)
+        token = torch.Tensor(batch_size)
+        token.fill_(trg_sos)                                                    # (batch_size,)
+        out, state = self.decoder(token, state, context)                        # (batch_size, vocab_size), (batch_size, dec_units)
+        probs, tokens = torch.topk(out, beam_size, dim=1)                       # (batch_size, beam_size), (batch_size, beam_size)
+        scores = -torch.log(probs)                                              # (batch_size, beam_size)
+        sequences = tokens.squeeze(1)                                           # (batch_size, seq_len=1, beam_size)
+
+        # beam search main loop
+        for t in range(max_len):
+            context = self._compute_context(state, enc_outputs)
+            for seq in sequences.permute(2, 0, 1):                              # (batch_size, seq_len)
+                token = seq[:, -1]                                              # (batch_size,)
+                out, state = self.decoder(token, state, context)
+                probs, tokens = torch.topk(out, beam_size, dim=1)
+                # todo
 
     def _compute_context(self, dec_state, enc_outputs):
         """

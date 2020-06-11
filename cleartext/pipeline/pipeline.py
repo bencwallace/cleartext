@@ -257,7 +257,6 @@ class Pipeline(object):
         # run model with dummy target
         sources, targets = zip(*((example.src, example.trg) for example in self.test_data[:num_examples]))
         source_tensor = self.src.process(sources).to(self.device)
-        print(source_tensor.shape)
         _dummy = torch.zeros(source_tensor.shape, dtype=torch.long, device=self.device)
         _dummy.fill_(self.trg.vocab[self.SOS_TOKEN])
 
