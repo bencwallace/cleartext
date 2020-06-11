@@ -122,7 +122,7 @@ class Decoder(nn.Module):
         output = self.fc(combined)
 
         # return logits (rather than softmax activations) for compatibility with cross-entropy loss
-        dec_state = dec_state.unsqueezed(0)
+        dec_state = dec_state.squeeze(0)
         return output, dec_state
 
 
