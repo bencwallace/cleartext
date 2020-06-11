@@ -172,16 +172,19 @@ class EncoderDecoder(nn.Module):
 
         return outputs
 
-    def beam_search_decode(self, source: Tensor, beam_size: int, trg_sos: int, max_len: int) -> Tensor:
+    def beam_search(self, source: Tensor, beam_size: int, trg_sos: int, max_len: int) -> Tuple[Tensor, Tensor]:
         """
         :param source: Tensor
             Source sequence of shape (src_len, batch_size)
         :param beam_size: int
         :param trg_sos: int
         :param max_len: int
-        :return: Tensor
-            Output sequence of shape (max_len, batch_size)
+        :return: Tuple[Tensor, Tensor]
+            Output sequences of shape (max_len, batch_size, beam_size) and *unnormalized* scores of shape
+            (batch_size, beam_size)
         """
+        self.eval()
+
         batch_size = source.shape[1]
         # run encoder
         enc_outputs, state = self.encoder(source)
@@ -241,12 +244,7 @@ class EncoderDecoder(nn.Module):
             # update sequences tensor
             sequences = new_sequences
 
-        # select best sequence -- todo: length norm
-        scores = torch.argmax(scores, dim=1).view(1, batch_size, 1)
-        scores = scores.repeat(max_len, 1, 1)
-        sequences = torch.gather(sequences, 2, scores).squeeze(2)
-        # transpose at the end so input and output shapes are consistent
-        return sequences
+        return sequences, scores
 
     def _compute_context(self, dec_state, enc_outputs):
         """
