@@ -172,7 +172,6 @@ class EncoderDecoder(nn.Module):
 
         return outputs
 
-    # todo: extend to batches
     def beam_search_decode(self, source: Tensor, beam_size: int, trg_sos: int, max_len: int) -> Tensor:
         """
         :param source: Tensor
@@ -180,7 +179,8 @@ class EncoderDecoder(nn.Module):
         :param beam_size: int
         :param trg_sos: int
         :param max_len: int
-        :return:
+        :return: Tensor
+            Output sequence of shape (max_len, batch_size)
         """
         batch_size = source.shape[1]
         # run encoder
@@ -188,42 +188,44 @@ class EncoderDecoder(nn.Module):
 
         # run decoder to predict distribution over first word
         context = self._compute_context(state, enc_outputs)
-        token = torch.Tensor(batch_size)
+        token = torch.LongTensor(batch_size)
         token.fill_(trg_sos)                                                    # (batch_size,)
         out, state = self.decoder(token, state, context)                        # (batch_size, vocab_size), (batch_size, dec_units)
 
         # initialize scores, sequences, and states
         scores, sequences = torch.topk(out, beam_size, dim=1)                   # (batch_size, beam_size)
         scores = torch.log(scores)                                              # (batch_size, beam_size)
-        sequences = sequences.squeeze(1)                                        # (batch_size, seq_len=1, beam_size)
-        states = torch.Tensor(beam_size)
-        states.fill_(state)
+        sequences = sequences.unsqueeze(1)                                      # (batch_size, seq_len=1, beam_size)
+        states = state.unsqueeze(1).repeat(1, beam_size, 1)
 
-        # beam search main loop -- generate new sequences and scores
+        # main loop
         for t in range(max_len):
+            # generate scores for next time step
             all_scores = torch.Tensor()
             for i, seq in enumerate(sequences.permute(2, 0, 1)):                # (batch_size, seq_len)
                 # run decoder
-                context = self._compute_context(states[i], enc_outputs)
+                context = self._compute_context(states[:, i], enc_outputs)
                 token = seq[:, -1]                                              # (batch_size,)
-                out, states[i] = self.decoder(token, states[i], context)
+                out, states[:, i] = self.decoder(token, states[:, i], context)
 
                 # update scores
                 curr_scores = scores[:, i]                                      # (batch_size,)
-                all_scores = torch.cat((all_scores, curr_scores - torch.log(out)))
-            # at this point, all_scores has shape (batch_size, beam_size * vocab_size)
+                new_scores = curr_scores.unsqueeze(1).repeat(1, out.shape[1]) - torch.log(out)
+                all_scores = torch.cat((all_scores, new_scores), dim=1)
 
-            # search for top scores and sequences
+            # search for top scores and generate new sequences
             top_scores, indices = torch.topk(all_scores, beam_size, dim=1)      # (batch_size, beam_size)
-            new_sequences = torch.Tensor()
+            new_sequences = torch.LongTensor()
             scores = torch.Tensor()
-            for idx, score in zip(indices, top_scores):                         # (batch_size,)     ???
+            for idx, score in zip(indices.permute(1, 0), top_scores.permute(1, 0)):    # (batch_size,)
                 # convert idx into corresponding sequence and additional token
                 seq_index = idx // self.target_vocab_size                       # (batch_size,)
                 vocab_index = idx % self.target_vocab_size
 
-                # update sequences
-                new_seq = torch.cat((sequences[:, :, seq_index], torch.Tensor([vocab_index])), dim=1)  # (batch_size, seq_len+1)
+                seq_index = seq_index.unsqueeze(1).repeat(1, t).unsqueeze(2)
+                gathered = torch.gather(sequences, 2, seq_index)
+                vocab_index = vocab_index.view(batch_size, 1, 1)
+                new_seq = torch.cat((gathered, vocab_index), dim=1)
                 new_sequences = torch.cat((new_sequences, new_seq), dim=2)      # (batch_size, seq_len+1, i<beam_size)
 
                 # update scores
@@ -231,8 +233,12 @@ class EncoderDecoder(nn.Module):
                 scores = torch.cat((scores, score), dim=1)                      # (batch_size, i)
             sequences = new_sequences
 
-        # re-check:
-        return sequences[torch.argmax(scores, dim=1)]
+        # select best sequence
+        scores = torch.argmax(scores, dim=1).view(batch_size, 1, 1)
+        scores = scores.repeat(1, max_len, 1)
+        sequences = torch.gather(sequences, 2, scores).squeeze(2)
+        # transpose at the end so input and output shapes are consistent
+        return sequences.T
 
     def _compute_context(self, dec_state, enc_outputs):
         """
