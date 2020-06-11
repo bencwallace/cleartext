@@ -176,74 +176,64 @@ class EncoderDecoder(nn.Module):
     def beam_search(self, source: Tensor, beam_size: int, trg_sos: int, max_len: int) -> Tuple[Tensor, Tensor]:
         """
         :param source: Tensor
-            Source sequence of shape (src_len, batch_size)
+            Source sequence of shape (src_len,)
         :param beam_size: int
         :param trg_sos: int
         :param max_len: int
         :return: Tuple[Tensor, Tensor]
-            Output sequences of shape (max_len, batch_size, beam_size) and *unnormalized* scores of shape
-            (batch_size, beam_size)
+            Un-trimmed output sequences of shape (max_len, beam_size) and *unnormalized* scores of shape (beam_size,)
         """
         self.eval()
-        batch_size = source.shape[1]
         # run encoder
-        enc_outputs, state = self.encoder(source)
+        enc_outputs, state = self.encoder(source.unsqueeze(1))
 
         # initialize distribution over first word
         context = self._compute_context(state, enc_outputs)
-        token = torch.LongTensor(batch_size).to(self.device)
-        token.fill_(trg_sos)                                                    # (batch_size,)
-        out, state = self.decoder(token, state, context)                        # (batch_size, vocab_size)
-        vocab_size = out.shape[1]                                               # (batch_size, dec_units)
+        token = torch.LongTensor([trg_sos]).to(self.device)
+        out, state = self.decoder(token, state, context)                        # (1, vocab_size), (1, dec_units)
+
+        # compute log-likelihood scores
+        probs = F.softmax(out, dim=1)
+        scores = torch.log(probs)
 
         # initialize scores, sequences, and states
-        scores, sequences = torch.topk(out, beam_size, dim=1)                   # (batch_size, beam_size)
-        scores = torch.log(scores)                                              # (batch_size, beam_size)
-        sequences = sequences.unsqueeze(0)                                      # (seq_len=1, batch_size, beam_size)
-        states = state.unsqueeze(1).repeat(1, beam_size, 1)                     # (batch_size, beam_size, dec_units)
+        scores, sequences = torch.topk(scores, beam_size, dim=1)                # (1, beam_size), (seq_len=1, beam_size)
+        scores = scores.squeeze(0)                                              # (beam_size,)
+        states = state.unsqueeze(0).repeat(beam_size, 1, 1)                     # (beam_size, 1, dec_units)
 
         # main loop over time steps
         for t in range(1, max_len):
             # generate scores for next time step -- todo: vectorize (requires modifying _compute_context)
             all_scores = torch.Tensor().to(self.device)
-            for i, seq in enumerate(sequences.permute(2, 0, 1)):                # (seq_len, batch_size)
+            for i, seq in enumerate(sequences.permute(1, 0)):                   # (seq_len,)
                 # run decoder
-                context = self._compute_context(states[:, i], enc_outputs)
-                token = seq[-1, :]                                              # (batch_size,)
-                out, states[:, i] = self.decoder(token, states[:, i], context)
+                context = self._compute_context(states[i], enc_outputs)
+                token = seq[-1].unsqueeze(0)                                    # (1,)
+                out, states[i] = self.decoder(token, states[i], context)        # (1, vocab_size), (1, dec_units)
+                # apply softmax
+                probs = F.softmax(out, dim=1)                                   # (1, vocab_size)
 
                 # update scores
-                curr_scores = scores[:, i]                                      # (batch_size,)
-                new_scores = curr_scores.unsqueeze(1) + torch.log(out)          # (batch_size, vocab_size)
-                all_scores = torch.cat((all_scores, new_scores), dim=1)         # (batch_size, i, vocab_size)
+                curr_score = scores[i].item()
+                new_scores = curr_score + torch.log(probs)                      # (1, vocab_size)
+                all_scores = torch.cat((all_scores, new_scores), dim=0)         # (i + 1, vocab_size)
 
-            # all_scores has shape (batch_size, beam_size * vocab_size)
-            top_scores, indices = torch.topk(all_scores, beam_size, dim=1)      # (batch_size, beam_size)
+            # all_scores has shape (beam_size, vocab_size)
+            all_scores = all_scores.flatten()                                   # (beam_size * vocab_size,)
+            scores, indices = torch.topk(all_scores, beam_size)                 # (beam_size,)
 
             # create placeholder for new sequences and scores
             new_sequences = torch.LongTensor().to(self.device)
-            scores = torch.Tensor().to(self.device)
             # loop through `beam_size` number of candidates and build each one
-            for idx, score in zip(indices.permute(1, 0), top_scores.permute(1, 0)):
+            for idx in indices:
+                idx.item()
                 # convert idx into corresponding sequence and additional token (notice all_scores.shape above)
-                # seq_index = idx // self.target_vocab_size                       # (batch_size,)
-                # vocab_index = idx % self.target_vocab_size
-                seq_index, vocab_index = np.divmod(idx.numpy(), self.target_vocab_size)
-                seq_index = torch.from_numpy(seq_index).long().to(self.device)
-                vocab_index = torch.from_numpy(vocab_index).long().to(self.device)
+                seq_index = idx // self.target_vocab_size
+                vocab_index = idx % self.target_vocab_size
 
-                # identify target sequence and vocabulary word
-                seq_index = seq_index.view(1, batch_size, 1).repeat(t, 1, 1)
-                gathered = torch.gather(sequences, 2, seq_index)
-
-                # extend sequence using word
-                vocab_index = vocab_index.view(1, batch_size, 1)
-                new_seq = torch.cat((gathered, vocab_index), dim=0)
-                new_sequences = torch.cat((new_sequences, new_seq), dim=2)      # (seq_len+1, batch_size, i<beam_size)
-
-                # update scores
-                score = score.unsqueeze(1)                                      # (batch_size, 1)
-                scores = torch.cat((scores, score), dim=1)                      # (batch_size, i)
+                # add new sequence
+                new_seq = torch.cat((sequences[:, seq_index], vocab_index.unsqueeze(0)))     # (t + 1,)
+                new_sequences = torch.cat((new_sequences, new_seq.unsqueeze(1)), dim=1)      # (t + 1, num_iterations)
             # update sequences tensor
             sequences = new_sequences
 

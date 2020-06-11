@@ -289,7 +289,7 @@ class Pipeline(object):
     def beam_search(self, source, beam_size: int, max_len: int, alpha: float = 1):
         """
         :param source:
-            Iterator over lists of tokens
+            Iterator over tokens
         :param beam_size: int
         :param max_len: int
         :param alpha: float
@@ -297,39 +297,30 @@ class Pipeline(object):
         :return:
             List of tokens
         """
-        batch_size = len(source)
         sos_index = self.src.vocab.stoi[self.SOS_TOKEN]
         eos_index = self.trg.vocab.stoi[self.EOS_TOKEN]
 
         # run beam search
-        source_tensor = self.src.process(source).to(self.device)
+        source_tensor = self.src.process([source]).to(self.device)
+        source_tensor = source_tensor.squeeze(1)
         output_tensor, scores = self.model.beam_search(source_tensor, beam_size, sos_index, max_len)
+        # output tensor has shape (max_len, beam_size)
+        # scores has shape (beam_size,)
 
         # find ends of sequences
-        lengths = torch.LongTensor(batch_size, beam_size).to(self.device)
-        lengths.fill_(max_len)
-        for example in range(batch_size):
-            for beam in range(beam_size):
-                try:
-                    index = output_tensor[:, example, beam].tolist().index(eos_index)
-                    lengths[example, beam] = index
-                except ValueError:
-                    pass
+        lengths = torch.LongTensor(beam_size).to(self.device)
+        for beam in range(beam_size):
+            try:
+                index = output_tensor[:, beam].tolist().index(eos_index)
+                lengths[beam] = index
+            except ValueError:
+                lengths[beam] = max_len
 
         # normalize scores and select winning sequence
-        scores = scores / lengths ** alpha                              # (batch_size, beam_size)
-        indices = torch.argmax(scores, 1).view(1, batch_size, 1).repeat(max_len, 1, 1)
-        sequences = torch.gather(output_tensor, 2, indices).T
-        sequences = sequences.squeeze(0)                                # (batch_size, max_len)
-        sequences = sequences.tolist()
+        scores = scores / lengths ** alpha                              # (beam_size,)
+        idx = torch.argmax(scores)
+        winner_len = lengths[idx]
+        winner = output_tensor[:winner_len, idx]
 
-        # truncate best sequence
-        result = []
-        indices = indices[0].squeeze(1)                                 # (batch_size,)
-        for i, seq in enumerate(sequences):
-            eos_pos = lengths[i, indices[i]]
-            seq = seq[:eos_pos]
-            seq = list(map(lambda d: self.trg.vocab.itos[d], seq))
-            result.append(seq)
-
+        result = list(map(lambda d: self.trg.vocab.itos[d], winner))
         return result
