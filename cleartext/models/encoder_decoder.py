@@ -1,7 +1,6 @@
 import random
 from typing import Tuple
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -162,7 +161,7 @@ class EncoderDecoder(nn.Module):
         max_len = target.shape[0]
         enc_outputs, state = self.encoder(source)
 
-        outputs = torch.zeros(max_len, batch_size, self.target_vocab_size).to(self.device)
+        outputs = torch.zeros(max_len, batch_size, self.target_vocab_size, device=self.device)
         out = target[0, :]
         for t in range(1, max_len):
             context = self._compute_context(state, enc_outputs)

@@ -30,7 +30,7 @@ class Pipeline(object):
 
     @classmethod
     def deserialize(cls, path: Union[str, Path], index=1):
-        # todo: accomodate saving/loading on different devices
+        # assume saved on gpu
         device = utils.get_device()
 
         path = Path(path)
@@ -43,13 +43,12 @@ class Pipeline(object):
         pipeline.trg = torch.load(path / 'trg.pt')
 
         # load model
-        src_vectors = pipeline.src.vocab.vectors.to(device)
-        trg_vectors = pipeline.trg.vocab.vectors.to(device)
+        src_vectors = pipeline.src.vocab.vectors = pipeline.src.vocab.vectors.to(device)
+        trg_vectors = pipeline.trg.vocab.vectors = pipeline.trg.vocab.vectors.to(device)
         pipeline.model = EncoderDecoder(device, src_vectors, trg_vectors,
                                         pl_dict['rnn_units'], pl_dict['attn_units'], pl_dict['dropout'])
-
         pipeline.model.load_state_dict(pl_dict['model_state_dict'])
-        pipeline.model = pipeline.model.to(device)
+        pipeline.model.to(device)
 
         # load optimizer
         pipeline.optimizer = optim.Adam(pipeline.model.parameters())
@@ -58,6 +57,7 @@ class Pipeline(object):
         # load loss
         pipeline.criterion = nn.CrossEntropyLoss(ignore_index=pipeline.trg.vocab.stoi[cls.PAD_TOKEN])
         pipeline.criterion.load_state_dict(pl_dict['loss_state_dict'])
+        pipeline.criterion.to(device)
 
         return pipeline
 
