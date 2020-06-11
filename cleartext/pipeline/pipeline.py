@@ -34,7 +34,7 @@ class Pipeline(object):
         device = utils.get_device()
 
         path = Path(path)
-        pl_dict = torch.load(path / f'model{index:02}.pt')
+        pl_dict = torch.load(path / f'model{index:02}.pt', map_location=device)
         name = pl_dict['name']
         pipeline = cls(name)
 
@@ -43,9 +43,13 @@ class Pipeline(object):
         pipeline.trg = torch.load(path / 'trg.pt')
 
         # load model
-        pipeline.model = EncoderDecoder(device, pipeline.src.vocab.vectors, pipeline.trg.vocab.vectors,
+        src_vectors = pipeline.src.vocab.vectors.to(device)
+        trg_vectors = pipeline.trg.vocab.vectors.to(device)
+        pipeline.model = EncoderDecoder(device, src_vectors, trg_vectors,
                                         pl_dict['rnn_units'], pl_dict['attn_units'], pl_dict['dropout'])
+
         pipeline.model.load_state_dict(pl_dict['model_state_dict'])
+        pipeline.model = pipeline.model.to(device)
 
         # load optimizer
         pipeline.optimizer = optim.Adam(pipeline.model.parameters())

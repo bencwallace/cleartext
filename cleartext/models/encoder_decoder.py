@@ -1,6 +1,7 @@
 import random
 from typing import Tuple
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -184,7 +185,6 @@ class EncoderDecoder(nn.Module):
             (batch_size, beam_size)
         """
         self.eval()
-
         batch_size = source.shape[1]
         # run encoder
         enc_outputs, state = self.encoder(source)
@@ -203,7 +203,7 @@ class EncoderDecoder(nn.Module):
         states = state.unsqueeze(1).repeat(1, beam_size, 1)                     # (batch_size, beam_size, dec_units)
 
         # main loop over time steps
-        for t in range(max_len):
+        for t in range(1, max_len):
             # generate scores for next time step -- todo: vectorize (requires modifying _compute_context)
             all_scores = torch.Tensor().to(self.device)
             for i, seq in enumerate(sequences.permute(2, 0, 1)):                # (seq_len, batch_size)
@@ -226,11 +226,14 @@ class EncoderDecoder(nn.Module):
             # loop through `beam_size` number of candidates and build each one
             for idx, score in zip(indices.permute(1, 0), top_scores.permute(1, 0)):
                 # convert idx into corresponding sequence and additional token (notice all_scores.shape above)
-                seq_index = idx // self.target_vocab_size                       # (batch_size,)
-                vocab_index = idx % self.target_vocab_size
+                # seq_index = idx // self.target_vocab_size                       # (batch_size,)
+                # vocab_index = idx % self.target_vocab_size
+                seq_index, vocab_index = np.divmod(idx.numpy(), self.target_vocab_size)
+                seq_index = torch.from_numpy(seq_index).long().to(self.device)
+                vocab_index = torch.from_numpy(vocab_index).long().to(self.device)
 
                 # identify target sequence and vocabulary word
-                seq_index = seq_index.view(1, batch_size, 1).repeat(t, 1, 1)    # (seq_len, batch_size, 1)
+                seq_index = seq_index.view(1, batch_size, 1).repeat(t, 1, 1)
                 gathered = torch.gather(sequences, 2, seq_index)
 
                 # extend sequence using word
