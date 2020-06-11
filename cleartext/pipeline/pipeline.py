@@ -302,7 +302,7 @@ class Pipeline(object):
         output_tensor, scores = self.model.beam_search(source_tensor, beam_size, sos_index, max_len)
 
         # find ends of sequences
-        lengths = torch.LongTensor(batch_size, beam_size)
+        lengths = torch.LongTensor(batch_size, beam_size).to(self.device)
         lengths.fill_(max_len)
         for example in range(batch_size):
             for beam in range(beam_size):
