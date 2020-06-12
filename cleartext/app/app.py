@@ -9,7 +9,7 @@ def process(data):
 
 
 @app.route('/', methods=['POST'])
-def hello():
+def main():
     data = request.get_data()
     result = process(data)
     return result
