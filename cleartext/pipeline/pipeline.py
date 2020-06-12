@@ -150,7 +150,7 @@ class Pipeline(object):
         return trainable, total
 
     def train(self, num_epochs: int):
-        signal.signal(signal.SIGINT, self._finalize)
+        # signal.signal(signal.SIGINT, self._finalize)
         best_valid_loss = float('inf')
         train_hist = [best_valid_loss, best_valid_loss]
         valid_hist = [best_valid_loss, best_valid_loss]
