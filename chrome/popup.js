@@ -8,6 +8,8 @@ xhttp.onreadystatechange = function() {
 	}
 };
 xhttp.open("POST", URL, true);
-xhttp.setRequestHeader("Content-type", "plain/text");
+xhttp.setRequestHeader("Content-type", "application/json");
 let selection = chrome.extension.getBackgroundPage().selection;
-xhttp.send(selection);
+xhttp.send(JSON.stringify({
+    "text": selection
+}));

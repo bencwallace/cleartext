@@ -11,9 +11,9 @@ from torchtext.data import Field
 from torchtext.data import BucketIterator
 from torchtext.data.metrics import bleu_score
 
-import cleartext.utils as utils
-from cleartext import PROJ_ROOT
-from cleartext.models import EncoderDecoder
+from .. import utils
+from .. import PROJ_ROOT
+from ..models import EncoderDecoder
 
 
 class Pipeline(object):
