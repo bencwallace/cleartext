@@ -6,6 +6,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 
+from .. import utils
+
 
 class Encoder(nn.Module):
     def __init__(self, embed_weights: Tensor, units: int, dropout: float) -> None:
@@ -24,6 +26,9 @@ class Encoder(nn.Module):
         self.fc = nn.Linear(units * 2, units)
         self.dropout = nn.Dropout(dropout)
 
+        utils.init_weights_(self.gru)
+        utils.init_weights_(self.fc)
+
     def forward(self, source: Tensor) -> Tuple[Tensor, Tensor]:
         """
         :param source: Tensor
@@ -32,7 +37,6 @@ class Encoder(nn.Module):
             Outputs of shape (seq_len, batch_size, units) and state of shape (batch_size, 2 * units)
         """
         embedded = self.embedding(source)
-        # todo: ensure state properly initialized
         outputs, state = self.gru(embedded)
 
         # combine and reshape bidirectional states for compatibility with (unidirectional) decoder
@@ -52,8 +56,11 @@ class Attention(nn.Module):
         """
         super().__init__()
         self.attn_in = state_dim * 3
+
         self.fc = nn.Linear(self.attn_in, units)
         self.dropout = nn.Dropout(dropout)
+
+        utils.init_weights_(self.fc)
 
     def forward(self, dec_state: Tensor, enc_outputs: Tensor) -> Tensor:
         """
@@ -80,7 +87,7 @@ class Attention(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, embed_weights: Tensor, units: int, dropout: float, enc_units) -> None:
+    def __init__(self, embed_weights: Tensor, units: int, dropout: float, enc_units: int) -> None:
         """
         :param embed_weights: Tensor
             Embedding weights of shape (trg_vocab_size, embed_dim)
@@ -88,11 +95,15 @@ class Decoder(nn.Module):
         :param dropout: float
         """
         super().__init__()
-        self.embedding = nn.Embedding.from_pretrained(embed_weights)
         self.vocab_size, embed_dim = embed_weights.shape
+
+        self.embedding = nn.Embedding.from_pretrained(embed_weights)
         self.rnn = nn.GRU((units * 2) + embed_dim, units)
         self.fc = nn.Linear(units + 2 * enc_units + embed_dim, self.vocab_size)
         self.dropout = nn.Dropout(dropout)
+
+        utils.init_weights_(self.rnn)
+        utils.init_weights_(self.fc)
 
     def forward(self, token: Tensor, dec_state: Tensor, context) -> Tuple[Tensor, Tensor]:
         """
@@ -141,12 +152,12 @@ class EncoderDecoder(nn.Module):
         :param dropout: float
         """
         super().__init__()
+        self.device = device
+        self.target_vocab_size = embed_weights_trg.shape[0]
+
         self.encoder = Encoder(embed_weights_src, rnn_units, dropout)
         self.attention = Attention(rnn_units, attn_units)
         self.decoder = Decoder(embed_weights_trg, rnn_units, dropout, rnn_units)
-
-        self.device = device
-        self.target_vocab_size = self.decoder.vocab_size
 
     def forward(self, source: Tensor, target: Tensor, teacher_forcing: float = 0.3) -> Tensor:
         """
@@ -202,7 +213,7 @@ class EncoderDecoder(nn.Module):
 
         # main loop over time steps
         for t in range(1, max_len):
-            # generate scores for next time step -- todo: vectorize (requires modifying _compute_context)
+            # generate scores for next time step -- todo: vectorize (may require modifying _compute_context)
             all_scores = torch.Tensor().to(self.device)
             for i, seq in enumerate(sequences.permute(1, 0)):                   # (seq_len,)
                 # run decoder

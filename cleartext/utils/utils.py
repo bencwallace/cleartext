@@ -1,7 +1,7 @@
 import math
 import re
 import unicodedata
-from typing import Tuple
+from typing import Iterator, List, Tuple
 
 import torch
 from torch import nn as nn
@@ -21,7 +21,7 @@ def format_time(elapsed: float) -> Tuple[int, int]:
     return mins, secs
 
 
-def init_weights(model: Module) -> None:
+def init_weights_(model: Module) -> None:
     for name, param in model.named_parameters():
         if 'weight' in name:
             nn.init.xavier_uniform_(param.data)
@@ -30,23 +30,18 @@ def init_weights(model: Module) -> None:
 
 
 # todo: use tokenizer to remove space around punctuation, etc.
-def seq_to_sentence(seq, vocab: Vocab, ignore) -> str:
-    def itos(i):
-        s = vocab.itos[i]
-        return '' if s in ignore else s
-    return ' '.join(list(map(itos, seq)))
+def seq_to_sentence(seq, vocab: Vocab, ignore: Iterator[int]) -> str:
+    return ' '.join(vocab.itos[i] if vocab.itos[i] not in ignore else '' for i in seq).strip()
 
 
-def preprocess_string(s: str) -> str:
-    s = s.lower().strip()
-    s = ''.join(c for c in unicodedata.normalize('NFD', s)
-                if unicodedata.category(c) != 'Mn')
-    s = re.sub(r'[^a-zA-Z.!?]+', r' ', s)
-    return s
-
-
-def preprocess(strings):
-    return list(map(preprocess_string, strings))
+def preprocess(strings: Iterator[str]) -> List[str]:
+    def preprocess_string(s: str) -> str:
+        s = s.lower().strip()
+        s = ''.join(c for c in unicodedata.normalize('NFD', s)
+                    if unicodedata.category(c) != 'Mn')
+        s = re.sub(r'[^a-zA-Z.!?]+', r' ', s)
+        return s
+    return [preprocess_string(s) for s in strings]
 
 
 def print_loss(loss: float, name: str = '') -> None:

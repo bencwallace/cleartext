@@ -12,8 +12,10 @@ from .. import PROJ_ROOT
 class WikiSL(TranslationDataset):
     urls = ['https://raw.githubusercontent.com/louismartin/dress-data/master/data-simplification.tar.bz2']
 
+    # shadowed TranslationDataset.splits because its download classmethod doesn't extract bzip
     @classmethod
-    def splits(cls, fields: Tuple[Field, Field], **kwargs):
+    def splits(cls, fields: Tuple[Field, Field], **kwargs)\
+            -> Tuple[TranslationDataset, TranslationDataset, TranslationDataset]:
         exts = ('.src', '.dst')
         root = PROJ_ROOT / 'data/raw/'
 
@@ -38,7 +40,7 @@ class WikiSL(TranslationDataset):
         path = check / cls.dir_name
         return super().splits(exts, fields, path=path, root=root, train=train, validation=valid, test=test, **kwargs)
 
-    # needed in order to limit number of examples
+    # shadowed super().__init__() to allow restricting the number of examples loaded (via kwargs)
     def __init__(self, path: str, exts: Tuple[str, str], fields: Tuple[Field, Field], **kwargs) -> None:
         if not isinstance(fields[0], (tuple, list)):
             fields = [('src', fields[0]), ('trg', fields[1])]

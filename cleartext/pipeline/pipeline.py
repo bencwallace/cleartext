@@ -1,8 +1,6 @@
-import signal
-import sys
 import time
 from pathlib import Path
-from typing import Union
+from typing import List, Tuple, Union
 
 import torch
 import torch.nn as nn
@@ -114,7 +112,7 @@ class Pipeline(object):
 
         return [len(dataset) for dataset in data]
 
-    def load_vectors(self, embed_dim: str, trg_vocab: int):
+    def load_vectors(self, embed_dim: int, trg_vocab: int) -> Tuple[int, int]:
         vectors_dir = self.VECTORS_ROOT / 'glove'
         vectors_path = f'glove.6B.{embed_dim}d'
         vocab_args = {'min_freq': self.MIN_FREQ, 'vectors': vectors_path, 'vectors_cache': vectors_dir}
@@ -126,13 +124,12 @@ class Pipeline(object):
 
         return len(self.src.vocab), len(self.trg.vocab)
 
-    def prepare_data(self, batch_size: int):
-        # todo: check if necessary that serialization depend on `embed_dim`
+    def prepare_data(self, batch_size: int) -> None:
         iterators = BucketIterator.splits((self.train_data, self.valid_data, self.test_data),
                                           batch_size=batch_size, device=self.device)
         self.train_iter, self.valid_iter, self.test_iter = iterators
 
-    def build_model(self, rnn_units: int, attn_units: int, dropout: float):
+    def build_model(self, rnn_units: int, attn_units: int, dropout: float) -> Tuple[int, int]:
         self.rnn_units = rnn_units
         self.attn_units = attn_units
         self.dropout = dropout
@@ -141,16 +138,13 @@ class Pipeline(object):
         self.model_path = self.root / f'model{self.model_index:02}.pt'
         self.model = EncoderDecoder(self.device, self.src.vocab.vectors, self.trg.vocab.vectors,
                                     rnn_units, attn_units, dropout).to(self.device)
-        self.model.apply(utils.init_weights)
-        trainable, total = utils.count_parameters(self.model)
 
         self.optimizer = optim.Adam(self.model.parameters())
         self.criterion = nn.CrossEntropyLoss(ignore_index=self.trg.vocab.stoi[self.PAD_TOKEN])
 
-        return trainable, total
+        return utils.count_parameters(self.model)
 
-    def train(self, num_epochs: int):
-        # signal.signal(signal.SIGINT, self._finalize)
+    def train(self, num_epochs: int) -> None:
         best_valid_loss = float('inf')
         train_hist = [best_valid_loss, best_valid_loss]
         valid_hist = [best_valid_loss, best_valid_loss]
@@ -194,20 +188,12 @@ class Pipeline(object):
                     'times_hist': times_hist
                 }, self.model_path)
             elif valid_hist[-1] > valid_hist[-2] > valid_hist[-3]:
-                self._finalize()
+                self.print_diagnostics()
                 break
         else:
-            self._finalize()
+            self.print_diagnostics()
 
-    def _finalize(self, _signal=None, _frame=None):
-        # reset default signal handler
-        def default_handler(_signal, _frame):
-            sys.exit(0)
-        signal.signal(signal.SIGINT, default_handler)
-
-        self.print_diagnostics()
-
-    def print_diagnostics(self, beam_size: int = 10, max_len: int = 30, num_examples: int = NUM_EXAMPLES):
+    def print_diagnostics(self, beam_size: int = 10, max_len: int = 30, num_examples: int = NUM_EXAMPLES) -> None:
         # Compute and print test loss
         print('\nTesting model')
         test_loss = utils.eval_step(self.model, self.test_iter, self.criterion)
@@ -253,7 +239,7 @@ class Pipeline(object):
                 f.write(target_out + '\n')
                 f.write(output_out + '\n')
 
-    def beam_search(self, source, beam_size: int, max_len: int, alpha: float = 1):
+    def beam_search(self, source, beam_size: int, max_len: int, alpha: float = 1) -> List[str]:
         """
         :param source:
             Iterator over tokens
@@ -270,9 +256,8 @@ class Pipeline(object):
         # run beam search
         source_tensor = self.src.process([source]).to(self.device)
         source_tensor = source_tensor.squeeze(1)
-        output_tensor, scores = self.model.beam_search(source_tensor, beam_size, sos_index, max_len)
-        # output tensor has shape (max_len, beam_size)
-        # scores has shape (beam_size,)
+        beam_search_results = self.model.beam_search(source_tensor, beam_size, sos_index, max_len)
+        output_tensor, scores = beam_search_results                     # (max_len, beam_size), (beam_size,)
 
         # find ends of sequences
         lengths = torch.LongTensor(beam_size).to(self.device)
@@ -289,5 +274,6 @@ class Pipeline(object):
         winner_len = lengths[idx]
         winner = output_tensor[:winner_len, idx]
 
+        # todo: use utils.seq_to_sentence -- first figure out why not getting <unk>
         result = [self.trg.vocab.itos[d] for d in winner]
         return result

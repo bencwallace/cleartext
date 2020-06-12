@@ -45,7 +45,7 @@ def main(name: str,
 
     # load embeddings
     print(f'Loading {embed_dim}-dimensional GloVe vectors')
-    src_vocab_size, trg_vocab_size = pipeline.load_vectors(embed_dim, trg_vocab)
+    src_vocab_size, trg_vocab_size = pipeline.load_vectors(int(embed_dim), trg_vocab)
     print(f'Source vocabulary size: {src_vocab_size}')
     print(f'Target vocabulary size: {trg_vocab_size}')
 
