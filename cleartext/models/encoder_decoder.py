@@ -152,6 +152,7 @@ class EncoderDecoder(nn.Module):
         """
         super().__init__()
         self.device = device
+        self.trg_vocab_size = trg_vocab_size
 
         self.encoder = Encoder(embed_weights_src, rnn_units, dropout)
         self.attention = Attention(rnn_units, attn_units)
@@ -170,7 +171,7 @@ class EncoderDecoder(nn.Module):
         max_len = target.shape[0]
         enc_outputs, state = self.encoder(source)
 
-        outputs = torch.zeros(max_len, batch_size, self.target_vocab_size, device=self.device)
+        outputs = torch.zeros(max_len, batch_size, self.trg_vocab_size, device=self.device)
         out = target[0, :]
         for t in range(1, max_len):
             context = self._compute_context(state, enc_outputs)
@@ -237,8 +238,8 @@ class EncoderDecoder(nn.Module):
             for idx in indices:
                 idx.item()
                 # convert idx into corresponding sequence and additional token (notice all_scores.shape above)
-                seq_index = idx // self.target_vocab_size
-                vocab_index = idx % self.target_vocab_size
+                seq_index = idx // self.trg_vocab_size
+                vocab_index = idx % self.trg_vocab_size
 
                 # add new sequence
                 new_seq = torch.cat((sequences[:, seq_index], vocab_index.unsqueeze(0)))     # (t + 1,)

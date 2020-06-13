@@ -136,7 +136,7 @@ class Pipeline(object):
 
         self.model_index += 1
         self.model_path = self.root / f'model{self.model_index:02}.pt'
-        self.model = EncoderDecoder(self.device, self.src.vocab.vectors, self.src.vocab.vectors,
+        self.model = EncoderDecoder(self.device, self.src.vocab.vectors, len(self.trg.vocab),
                                     rnn_units, attn_units, dropout).to(self.device)
 
         self.optimizer = optim.Adam(self.model.parameters())

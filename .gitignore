@@ -2,6 +2,7 @@
 __pycache__/
 /cleartext.egg-info/
 
+aws/*
 data/*
 vectors/*
 models/*
