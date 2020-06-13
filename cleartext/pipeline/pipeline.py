@@ -188,38 +188,19 @@ class Pipeline(object):
                     'times_hist': times_hist
                 }, self.model_path)
             elif valid_hist[-1] > valid_hist[-2] > valid_hist[-3]:
-                self.print_diagnostics()
                 break
-        else:
-            self.print_diagnostics()
 
-    def print_diagnostics(self, beam_size: int = 10, max_len: int = 30, num_examples: int = NUM_EXAMPLES) -> None:
-        # Compute and print test loss
-        print('\nTesting model')
+    def evaluate(self, beam_size: int = 10, max_len: int = 30, alpha: float = 1) -> Tuple[float, float, float, float]:
+        # Compute losses
+        train_loss = utils.eval_step(self.model, self.train_iter, self.criterion)
+        valid_loss = utils.eval_step(self.model, self.valid_iter, self.criterion)
         test_loss = utils.eval_step(self.model, self.test_iter, self.criterion)
-        utils.print_loss(test_loss, 'Test')
 
-        # Generate and print samples
-        examples = self.test_data[:num_examples]
+        # Run beam search on test data
         sources, targets = zip(*((e.src, e.trg) for e in self.test_data))
-        outputs = [self.beam_search(s, beam_size, max_len) for s in sources]
-        source_print = []
-        target_print = []
-        output_print = []
-        for i in range(num_examples):
-            source_out = '> ' + ' '.join(sources[i])
-            target_out = '= ' + ' '.join(targets[i])
-            output_out = '< ' + ' '.join(outputs[i])
+        outputs = [self.beam_search(s, beam_size, max_len, alpha) for s in sources]
 
-            source_print.append(source_out)
-            target_print.append(target_out)
-            output_print.append(output_out)
-
-            print(source_out)
-            print(target_out)
-            print(output_out)
-
-        # Compute and print BLEU score
+        # Compute average (test) BLEU score
         bleu = 0
         for target, output in zip(targets, outputs):
             # kill whitespace tokens, which crash BLEU score for some reason
@@ -227,17 +208,8 @@ class Pipeline(object):
             output = ' '.join(output).split()
             bleu += bleu_score([target], [[output]])
         bleu /= len(targets)
-        print(f'Average BLEU score: {bleu:.3f}')
 
-        # save summary data
-        path = str(self.model_path) + '.txt'
-        with open(path, 'w') as f:
-            f.write(f'Test loss: {test_loss}\n')
-            f.write(f'BLEU score: {bleu}\n')
-            for source_out, target_out, output_out in zip(source_print, target_print, output_print):
-                f.write(source_out + '\n')
-                f.write(target_out + '\n')
-                f.write(output_out + '\n')
+        return train_loss, valid_loss, test_loss, bleu
 
     def beam_search(self, source, beam_size: int, max_len: int, alpha: float = 1) -> List[str]:
         """
