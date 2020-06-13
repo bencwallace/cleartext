@@ -260,7 +260,7 @@ class Pipeline(object):
         output_tensor, scores = beam_search_results                     # (max_len, beam_size), (beam_size,)
 
         # find ends of sequences
-        lengths = torch.LongTensor(beam_size).to(self.device)
+        lengths = torch.empty(beam_size, dtype=torch.long, device=self.device)
         for beam in range(beam_size):
             try:
                 index = output_tensor[:, beam].tolist().index(eos_index)

@@ -1,9 +1,8 @@
-import random
 from typing import Tuple
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+from torch.nn.functional import softmax
 from torch import Tensor
 
 from .. import utils
@@ -82,7 +81,7 @@ class Attention(nn.Module):
         # todo: shouldn't this be fully connected?
         scores = torch.sum(scores, dim=2)
 
-        weights = F.softmax(scores, dim=1)
+        weights = softmax(scores, dim=1)
         return weights
 
 
@@ -178,7 +177,7 @@ class EncoderDecoder(nn.Module):
             context = self._compute_context(state, enc_outputs)
             out, state = self.decoder(out, state, context)
             outputs[t] = out
-            teacher_force = random.random() < teacher_forcing
+            teacher_force = torch.bernoulli(torch.tensor(teacher_forcing, dtype=torch.float)).item()
             out = (target[t] if teacher_force else out.max(1)[1])
 
         return outputs
@@ -199,11 +198,11 @@ class EncoderDecoder(nn.Module):
 
         # initialize distribution over first word
         context = self._compute_context(state, enc_outputs)
-        token = torch.LongTensor([trg_sos]).to(self.device)
+        token = torch.tensor([trg_sos], dtype=torch.long, device=self.device)
         out, state = self.decoder(token, state, context)                        # (1, vocab_size), (1, dec_units)
 
         # compute log-likelihood scores
-        probs = F.softmax(out, dim=1)
+        probs = softmax(out, dim=1)
         scores = torch.log(probs)
 
         # initialize scores, sequences, and states
@@ -214,14 +213,14 @@ class EncoderDecoder(nn.Module):
         # main loop over time steps
         for t in range(1, max_len):
             # generate scores for next time step -- todo: vectorize (may require modifying _compute_context)
-            all_scores = torch.Tensor().to(self.device)
+            all_scores = torch.empty(0, device=self.device)
             for i, seq in enumerate(sequences.permute(1, 0)):                   # (seq_len,)
                 # run decoder
                 context = self._compute_context(states[i], enc_outputs)
                 token = seq[-1].unsqueeze(0)                                    # (1,)
                 out, states[i] = self.decoder(token, states[i], context)        # (1, vocab_size), (1, dec_units)
                 # apply softmax
-                probs = F.softmax(out, dim=1)                                   # (1, vocab_size)
+                probs = softmax(out, dim=1)                                     # (1, vocab_size)
 
                 # update scores
                 curr_score = scores[i].item()
@@ -233,7 +232,7 @@ class EncoderDecoder(nn.Module):
             scores, indices = torch.topk(all_scores, beam_size)                 # (beam_size,)
 
             # create placeholder for new sequences and scores
-            new_sequences = torch.LongTensor().to(self.device)
+            new_sequences = torch.empty(0, dtype=torch.long, device=self.device)
             # loop through `beam_size` number of candidates and build each one
             for idx in indices:
                 idx.item()
