@@ -86,7 +86,7 @@ class Attention(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, embed_weights: Tensor, units: int, dropout: float, enc_units: int) -> None:
+    def __init__(self, embed_weights: Tensor, units: int, dropout: float, enc_units: int, vocab_size: int) -> None:
         """
         :param embed_weights: Tensor
             Embedding weights of shape (trg_vocab_size, embed_dim)
@@ -94,7 +94,8 @@ class Decoder(nn.Module):
         :param dropout: float
         """
         super().__init__()
-        self.vocab_size, embed_dim = embed_weights.shape
+        self.vocab_size = vocab_size
+        embed_dim = embed_weights.shape[1]
 
         self.embedding = nn.Embedding.from_pretrained(embed_weights)
         self.rnn = nn.GRU((units * 2) + embed_dim, units)
@@ -137,26 +138,24 @@ class Decoder(nn.Module):
 
 class EncoderDecoder(nn.Module):
     def __init__(self, device: torch.device,
-                 embed_weights_src: Tensor, embed_weights_trg: Tensor,
+                 embed_weights_src: Tensor, trg_vocab_size: int,
                  rnn_units: int, attn_units: int,
                  dropout: float) -> None:
         """
         :param device: torch.device
         :param embed_weights_src: Tensor
             Embedding weights of shape (src_vocab_size, embed_dim)
-        :param embed_weights_trg:
-            Embedding  weights of shape (trg_vocab_size, embed_dim)
+        :param trg_vocab_size:
         :param rnn_units: int
         :param attn_units: int
         :param dropout: float
         """
         super().__init__()
         self.device = device
-        self.target_vocab_size = embed_weights_trg.shape[0]
 
         self.encoder = Encoder(embed_weights_src, rnn_units, dropout)
         self.attention = Attention(rnn_units, attn_units)
-        self.decoder = Decoder(embed_weights_trg, rnn_units, dropout, rnn_units)
+        self.decoder = Decoder(embed_weights_src, rnn_units, dropout, rnn_units, trg_vocab_size)
 
     def forward(self, source: Tensor, target: Tensor, teacher_forcing: float = 0.3) -> Tensor:
         """

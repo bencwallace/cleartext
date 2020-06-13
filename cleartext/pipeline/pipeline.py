@@ -114,8 +114,8 @@ class Pipeline(object):
 
     def load_vectors(self, embed_dim: int, trg_vocab: int) -> Tuple[int, int]:
         vectors_dir = self.VECTORS_ROOT / 'glove'
-        vectors_path = f'glove.6B.{embed_dim}d'
-        vocab_args = {'min_freq': self.MIN_FREQ, 'vectors': vectors_path, 'vectors_cache': vectors_dir}
+        glove = f'glove.6B.{embed_dim}d'
+        vocab_args = {'min_freq': self.MIN_FREQ, 'vectors': glove, 'vectors_cache': vectors_dir}
         self.src.build_vocab(self.train_data, **vocab_args)
         self.trg.build_vocab(self.train_data, max_size=trg_vocab, **vocab_args)
 
@@ -136,7 +136,7 @@ class Pipeline(object):
 
         self.model_index += 1
         self.model_path = self.root / f'model{self.model_index:02}.pt'
-        self.model = EncoderDecoder(self.device, self.src.vocab.vectors, self.trg.vocab.vectors,
+        self.model = EncoderDecoder(self.device, self.src.vocab.vectors, self.src.vocab.vectors,
                                     rnn_units, attn_units, dropout).to(self.device)
 
         self.optimizer = optim.Adam(self.model.parameters())
