@@ -4,7 +4,10 @@ from torch.optim.optimizer import Optimizer
 from torchtext.data import Iterator
 
 
-def train_step(model: Module, iterator: Iterator, criterion: Module, optimizer: Optimizer, clip: int = 1) -> float:
+CLIP = 1
+
+
+def train_step(model: Module, iterator: Iterator, criterion: Module, optimizer: Optimizer) -> float:
     model.train()
     epoch_loss = 0
     for batch in iterator:
@@ -18,7 +21,7 @@ def train_step(model: Module, iterator: Iterator, criterion: Module, optimizer: 
         loss = criterion(output, target)
         loss.backward()
 
-        torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), CLIP)
         optimizer.step()
         epoch_loss += loss.item()
 

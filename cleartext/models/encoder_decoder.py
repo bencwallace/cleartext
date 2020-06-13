@@ -104,7 +104,7 @@ class Decoder(nn.Module):
         utils.init_weights_(self.rnn)
         utils.init_weights_(self.fc)
 
-    def forward(self, token: Tensor, dec_state: Tensor, context) -> Tuple[Tensor, Tensor]:
+    def forward(self, token: Tensor, dec_state: Tensor, context: Tensor) -> Tuple[Tensor, Tensor]:
         """
         :param token: Tensor
             Token of shape (batch_size,)
@@ -193,6 +193,7 @@ class EncoderDecoder(nn.Module):
             Un-trimmed output sequences of shape (max_len, beam_size) and *unnormalized* scores of shape (beam_size,)
         """
         self.eval()
+
         # run encoder
         enc_outputs, state = self.encoder(source.unsqueeze(1))
 
@@ -212,7 +213,7 @@ class EncoderDecoder(nn.Module):
 
         # main loop over time steps
         for t in range(1, max_len):
-            # generate scores for next time step -- todo: vectorize (may require modifying _compute_context)
+            # generate scores for next time step
             all_scores = torch.empty(0, device=self.device)
             for i, seq in enumerate(sequences.permute(1, 0)):                   # (seq_len,)
                 # run decoder
