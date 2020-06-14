@@ -5,6 +5,7 @@ conda_env: conda.yaml
 entry_points:
   main:
     parameters:
+      dataset: {type: str, default: 'wikismall'}
       num-epochs: {type: int, default: 1}
       max-examples: {type: int, default: 0}
       batch-size: {type: int, default: 32}
@@ -14,6 +15,7 @@ entry_points:
       attn-units: {type: int, default: 100}
       dropout: {type: float, default: 0.2}
       alpha: {type: float, default: 0.5}
+      seed: {type: int, default: -1}
     command: |
       python -m cleartext.scripts.train \
         --num_epochs {num-epochs} \
@@ -25,3 +27,4 @@ entry_points:
         --attn_units {attn-units} \
         --dropout {dropout} \
         --alpha {alpha}
+        --seed {seed}

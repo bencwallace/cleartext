@@ -7,3 +7,4 @@ aws/*
 data/*
 vectors/*
 models/*
+mlruns/*
