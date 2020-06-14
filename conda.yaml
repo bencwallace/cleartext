@@ -1,0 +1,14 @@
+name: cleartext
+channels:
+  - defaults
+  - conda-forge
+  - pytorch
+dependencies:
+  - python=3.6
+  - pytorch
+  - torchtext
+  - spacy
+  - click
+  - pytest
+  - flask
+  - mlflow

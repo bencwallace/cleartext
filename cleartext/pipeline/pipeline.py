@@ -2,6 +2,7 @@ import time
 from pathlib import Path
 from typing import List, Tuple, Union
 
+import mlflow
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -60,17 +61,10 @@ class Pipeline(object):
         return pipeline
 
     def __init__(self, name: str = 'pl'):
-        self.name = name
         (self.MODELS_ROOT / name).mkdir(exist_ok=True)
         self.root = self.MODELS_ROOT / name
         self.device = utils.get_device()
         self.model_index = 0
-
-        self.dataset_cls = None
-        self.max_examples = None
-        self.embed_dim = None
-        self.trg_vocab = None
-        self.batch_size = None
 
         self.src = None
         self.trg = None
@@ -83,19 +77,12 @@ class Pipeline(object):
         self.valid_iter = None
         self.test_iter = None
 
-        self.rnn_units = None
-        self.attn_units = None
-        self.dropout = None
-
         self.model_path = None
         self.model = None
         self.optimizer = None
         self.criterion = None
 
-    def load_data(self, dataset_cls: type, max_examples: int):
-        self.dataset_cls = dataset_cls
-        self.max_examples = max_examples
-
+    def load_data(self, dataset_cls: type, max_examples: Union[int, None] = None):
         field_args = {
             'tokenize': 'spacy', 'tokenizer_language': 'en_core_web_sm',
             'init_token': self.SOS_TOKEN, 'eos_token': self.EOS_TOKEN,
@@ -112,7 +99,7 @@ class Pipeline(object):
 
         return [len(dataset) for dataset in data]
 
-    def load_vectors(self, embed_dim: int, trg_vocab: int) -> Tuple[int, int]:
+    def load_vectors(self, embed_dim: int, trg_vocab: Union[None, int]) -> Tuple[int, int]:
         vectors_dir = self.VECTORS_ROOT / 'glove'
         vectors_path = f'glove.6B.{embed_dim}d'
         vocab_args = {'min_freq': self.MIN_FREQ, 'vectors': vectors_path, 'vectors_cache': vectors_dir}
@@ -130,10 +117,6 @@ class Pipeline(object):
         self.train_iter, self.valid_iter, self.test_iter = iterators
 
     def build_model(self, rnn_units: int, attn_units: int, dropout: float) -> Tuple[int, int]:
-        self.rnn_units = rnn_units
-        self.attn_units = attn_units
-        self.dropout = dropout
-
         self.model_index += 1
         self.model_path = self.root / f'model{self.model_index:02}.pt'
         self.model = EncoderDecoder(self.device, self.src.vocab.vectors, self.trg.vocab.vectors,
@@ -158,9 +141,11 @@ class Pipeline(object):
             elapsed = end_time - start_time
 
             # update histories
-            train_hist.append(train_loss)
             valid_hist.append(valid_loss)
-            times_hist.append(elapsed)
+            mlflow.log_metrics({
+                'train_loss': train_loss,
+                'valid_loss': valid_loss
+            }, step=epoch)
 
             # print epoch diagnostics
             epoch_mins, epoch_secs = utils.format_time(elapsed)
@@ -172,20 +157,10 @@ class Pipeline(object):
             if valid_loss < best_valid_loss:
                 best_valid_loss = valid_loss
                 torch.save({
-                    'name': self.name,
                     'device': self.device,
-                    'embed_dim': self.embed_dim,
-                    'trg_vocab': self.trg_vocab,
-                    'batch_size': self.batch_size,
-                    'rnn_units': self.rnn_units,
-                    'attn_units': self.attn_units,
-                    'dropout': self.dropout,
                     'model_state_dict': self.model.state_dict(),
                     'optimizer_state_dict': self.optimizer.state_dict(),
-                    'loss_state_dict': self.criterion.state_dict(),
-                    'train_hist': train_hist,
-                    'valid_hist': valid_hist,
-                    'times_hist': times_hist
+                    'loss_state_dict': self.criterion.state_dict()
                 }, self.model_path)
             elif valid_hist[-1] > valid_hist[-2] > valid_hist[-3]:
                 break
