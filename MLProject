@@ -18,6 +18,7 @@ entry_points:
       seed: {type: int, default: -1}
     command: |
       python -m cleartext.scripts.train \
+        {dataset}
         --num_epochs {num-epochs} \
         --max_examples {max-examples} \
         --batch_size {batch-size} \
