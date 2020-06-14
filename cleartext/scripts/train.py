@@ -36,19 +36,6 @@ MODELS_ROOT = PROJ_ROOT / 'models'
 def main(num_epochs: int, max_examples: int, batch_size: int,
          embed_dim: str, trg_vocab: int, rnn_units: int, attn_units: int,
          dropout: float, alpha: float) -> None:
-    # log parameters
-    mlflow.log_params({
-        'num_epochs': str(num_epochs),
-        'max_examples': str(max_examples),
-        'batch_size': str(batch_size),
-        'embed_dim': str(embed_dim),
-        'trg_vocab': str(trg_vocab),
-        'rnn_units': str(rnn_units),
-        'attn_units': str(attn_units),
-        'dropout': str(dropout),
-        'alpha': str(alpha)
-    })
-
     # initialize pipeline
     pipeline = Pipeline()
     print(f'Using {pipeline.device}')

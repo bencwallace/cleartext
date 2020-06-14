@@ -15,7 +15,7 @@ entry_points:
       dropout: {type: float, default: 0.2}
       alpha: {type: float, default: 0.5}
     command: |
-      python scripts/train.py \
+      python -m cleartext.scripts.train \
         --num_epochs {num-epochs} \
         --max_examples {max-examples} \
         --batch_size {batch-size} \
