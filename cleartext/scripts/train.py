@@ -48,10 +48,6 @@ def main(dataset: str,
         raise ValueError(f'Unknown dataset "{dataset}"')
     max_examples = max_examples if max_examples else None
     trg_vocab = trg_vocab if trg_vocab else None
-    if seed > 0:
-        torch.manual_seed(seed)
-    else:
-        torch.seed()
 
     # initialize pipeline
     pipeline = Pipeline()
@@ -82,6 +78,10 @@ def main(dataset: str,
 
     # run training loop
     print(f'Training model for {num_epochs} epochs')
+    if seed > 0:
+        torch.manual_seed(seed)
+    else:
+        torch.seed()
     pipeline.train(num_epochs)
 
     # reload last checkpoint (without losing dataset)
