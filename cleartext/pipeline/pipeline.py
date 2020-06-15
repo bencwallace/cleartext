@@ -116,11 +116,11 @@ class Pipeline(object):
                                           batch_size=batch_size, device=self.device)
         self.train_iter, self.valid_iter, self.test_iter = iterators
 
-    def build_model(self, rnn_units: int, attn_units: int, dropout: float) -> Tuple[int, int]:
+    def build_model(self, rnn_units: int, attn_units: int, num_layers: int, dropout: float) -> Tuple[int, int]:
         self.model_index += 1
         self.model_path = self.root / f'model{self.model_index:02}.pt'
         self.model = EncoderDecoder(self.device, self.src.vocab.vectors, self.trg.vocab.vectors,
-                                    rnn_units, attn_units, dropout).to(self.device)
+                                    rnn_units, attn_units, num_layers, dropout).to(self.device)
 
         self.optimizer = optim.Adam(self.model.parameters())
         self.criterion = nn.CrossEntropyLoss(ignore_index=self.trg.vocab.stoi[self.PAD_TOKEN])
@@ -129,9 +129,7 @@ class Pipeline(object):
 
     def train(self, num_epochs: int) -> None:
         best_valid_loss = float('inf')
-        train_hist = [best_valid_loss, best_valid_loss]
         valid_hist = [best_valid_loss, best_valid_loss]
-        times_hist = [0, 0]
         for epoch in range(num_epochs):
             # perform step
             start_time = time.time()
