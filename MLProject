@@ -27,5 +27,5 @@ entry_points:
         --rnn_units {rnn-units} \
         --attn_units {attn-units} \
         --dropout {dropout} \
-        --alpha {alpha}
+        --alpha {alpha} \
         --seed {seed}

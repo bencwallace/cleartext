@@ -80,8 +80,6 @@ def main(dataset: str,
     print(f'Training model for {num_epochs} epochs')
     if seed > 0:
         torch.manual_seed(seed)
-    else:
-        torch.seed()
     pipeline.train(num_epochs)
 
     # reload last checkpoint (without losing dataset)
