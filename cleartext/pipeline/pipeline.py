@@ -1,7 +1,9 @@
 import time
+import warnings
 from pathlib import Path
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
+import mlflow
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -60,17 +62,10 @@ class Pipeline(object):
         return pipeline
 
     def __init__(self, name: str = 'pl'):
-        self.name = name
         (self.MODELS_ROOT / name).mkdir(exist_ok=True)
         self.root = self.MODELS_ROOT / name
         self.device = utils.get_device()
         self.model_index = 0
-
-        self.dataset_cls = None
-        self.max_examples = None
-        self.embed_dim = None
-        self.trg_vocab = None
-        self.batch_size = None
 
         self.src = None
         self.trg = None
@@ -83,25 +78,19 @@ class Pipeline(object):
         self.valid_iter = None
         self.test_iter = None
 
-        self.rnn_units = None
-        self.attn_units = None
-        self.dropout = None
-
         self.model_path = None
         self.model = None
         self.optimizer = None
         self.criterion = None
 
-    def load_data(self, dataset_cls: type, max_examples: int):
-        self.dataset_cls = dataset_cls
-        self.max_examples = max_examples
-
+    def load_data(self, dataset_cls: type, max_examples: Optional[int] = None):
         field_args = {
             'tokenize': 'spacy', 'tokenizer_language': 'en_core_web_sm',
             'init_token': self.SOS_TOKEN, 'eos_token': self.EOS_TOKEN,
             'pad_token': self.PAD_TOKEN, 'unk_token': self.UNK_TOKEN,
             'lower': True, 'preprocessing': utils.preprocess
         }
+        warnings.filterwarnings('ignore', category=DeprecationWarning, lineno=6)
         if self.src is None:
             self.src = Field(**field_args)
         if self.trg is None:
@@ -112,7 +101,7 @@ class Pipeline(object):
 
         return [len(dataset) for dataset in data]
 
-    def load_vectors(self, embed_dim: int, trg_vocab: int) -> Tuple[int, int]:
+    def load_vectors(self, embed_dim: int, trg_vocab: Optional[int]) -> Tuple[int, int]:
         vectors_dir = self.VECTORS_ROOT / 'glove'
         glove = f'glove.6B.{embed_dim}d'
         vocab_args = {'min_freq': self.MIN_FREQ, 'vectors': glove, 'vectors_cache': vectors_dir}
@@ -129,26 +118,20 @@ class Pipeline(object):
                                           batch_size=batch_size, device=self.device)
         self.train_iter, self.valid_iter, self.test_iter = iterators
 
-    def build_model(self, rnn_units: int, attn_units: int, dropout: float) -> Tuple[int, int]:
-        self.rnn_units = rnn_units
-        self.attn_units = attn_units
-        self.dropout = dropout
-
+    def build_model(self, rnn_units: int, attn_units: int, num_layers: int, dropout: float) -> Tuple[int, int]:
         self.model_index += 1
         self.model_path = self.root / f'model{self.model_index:02}.pt'
         self.model = EncoderDecoder(self.device, self.src.vocab.vectors, len(self.trg.vocab),
-                                    rnn_units, attn_units, dropout).to(self.device)
+                                    rnn_units, attn_units, num_layers, dropout).to(self.device)
 
         self.optimizer = optim.Adam(self.model.parameters())
         self.criterion = nn.CrossEntropyLoss(ignore_index=self.trg.vocab.stoi[self.PAD_TOKEN])
 
         return utils.count_parameters(self.model)
 
-    def train(self, num_epochs: int) -> None:
+    def train(self, num_epochs: int) -> int:
         best_valid_loss = float('inf')
-        train_hist = [best_valid_loss, best_valid_loss]
         valid_hist = [best_valid_loss, best_valid_loss]
-        times_hist = [0, 0]
         for epoch in range(num_epochs):
             # perform step
             start_time = time.time()
@@ -158,9 +141,11 @@ class Pipeline(object):
             elapsed = end_time - start_time
 
             # update histories
-            train_hist.append(train_loss)
             valid_hist.append(valid_loss)
-            times_hist.append(elapsed)
+            mlflow.log_metrics({
+                'train_loss': train_loss,
+                'valid_loss': valid_loss
+            }, step=epoch)
 
             # print epoch diagnostics
             epoch_mins, epoch_secs = utils.format_time(elapsed)
@@ -172,23 +157,13 @@ class Pipeline(object):
             if valid_loss < best_valid_loss:
                 best_valid_loss = valid_loss
                 torch.save({
-                    'name': self.name,
                     'device': self.device,
-                    'embed_dim': self.embed_dim,
-                    'trg_vocab': self.trg_vocab,
-                    'batch_size': self.batch_size,
-                    'rnn_units': self.rnn_units,
-                    'attn_units': self.attn_units,
-                    'dropout': self.dropout,
                     'model_state_dict': self.model.state_dict(),
                     'optimizer_state_dict': self.optimizer.state_dict(),
-                    'loss_state_dict': self.criterion.state_dict(),
-                    'train_hist': train_hist,
-                    'valid_hist': valid_hist,
-                    'times_hist': times_hist
+                    'loss_state_dict': self.criterion.state_dict()
                 }, self.model_path)
             elif valid_hist[-1] > valid_hist[-2] > valid_hist[-3]:
-                break
+                return epoch + 1
 
     def evaluate(self, beam_size: int = 10, max_len: int = 30, alpha: float = 1) -> Tuple[float, float, float, float]:
         # Compute losses

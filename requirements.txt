@@ -1,7 +1,8 @@
 pytorch
 torchtext~=0.6.0
 setuptools~=47.1.1
-spacy~=2.2.4
+spacy>=2.2.0,<3.0.0
 click~=7.1.2
 pytest~=5.4.2
 flask~=1.1.2
+https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-2.2.0/en_core_web_sm-2.2.0.tar.gz#egg=en_core_web_sm

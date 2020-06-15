@@ -53,7 +53,7 @@ class WikiSL(TranslationDataset):
                 io.open(trg_path, mode='r', encoding='utf-8') as trg_file:
             for i, line in enumerate(zip(src_file, trg_file)):
                 src_line, trg_line = line
-                if i == max_examples:
+                if max_examples and i == max_examples:
                     break
                 src_line, trg_line = src_line.strip(), trg_line.strip()
                 if src_line != '' and trg_line != '':

@@ -9,20 +9,23 @@ from .. import utils
 
 
 class Encoder(nn.Module):
-    def __init__(self, embed_weights: Tensor, units: int, dropout: float) -> None:
+    def __init__(self, embed_weights: Tensor, units: int, num_layers: int, dec_units: int, dropout: float) -> None:
         """
         :param embed_weights: Tensor
             Embedding weights of shape (src_vocab_size, embed_dim)
         :param units: int
+        :param num_layers: int
+        :param dec_units: int
         :param dropout: float
         """
         super().__init__()
         self.units = units
+        self.num_layers = num_layers
         self.embed_dim = embed_weights.shape[1]
 
         self.embedding = nn.Embedding.from_pretrained(embed_weights)
-        self.gru = nn.GRU(self.embed_dim, units, bidirectional=True)
-        self.fc = nn.Linear(units * 2, units)
+        self.gru = nn.GRU(self.embed_dim, units, num_layers, bidirectional=True)
+        self.fc = nn.Linear(units * 2, dec_units)
         self.dropout = nn.Dropout(dropout)
 
         utils.init_weights_(self.gru)
@@ -33,7 +36,7 @@ class Encoder(nn.Module):
         :param source: Tensor
             Source sequence of shape (seq_len, batch_size)
         :return: Tuple[Tensor, Tensor]
-            Outputs of shape (seq_len, batch_size, units) and state of shape (batch_size, 2 * units)
+            Outputs of shape (seq_len, batch_size, 2 * units) and state of shape (1, batch_size, units)
         """
         embedded = self.embedding(source)
         outputs, state = self.gru(embedded)
@@ -41,45 +44,46 @@ class Encoder(nn.Module):
         # combine and reshape bidirectional states for compatibility with (unidirectional) decoder
         combined = torch.cat((state[-2, :, :], state[-1, :, :]), dim=1)
         combined = self.dropout(combined)
-        state = torch.tanh(self.fc(combined))
+        state = torch.tanh(self.fc(combined))                                       # (layers, batch, dec)
 
-        return outputs, state
+        return outputs, state.unsqueeze(0)
 
 
 class Attention(nn.Module):
-    def __init__(self, state_dim: int, units: int, dropout: float = 0) -> None:
+    def __init__(self, enc_units: int, dec_units: int, units: int, dropout: float = 0) -> None:
         """
-        :param state_dim: int
+        :param enc_units: int
+        :param dec_units: int
         :param units: int
         :param dropout: float
         """
         super().__init__()
-        self.attn_in = state_dim * 3
+        self.attn_in = 2 * enc_units + dec_units
 
-        self.fc = nn.Linear(self.attn_in, units)
+        self.fc1 = nn.Linear(self.attn_in, units)
+        self.fc2 = nn.Linear(units, 1)
         self.dropout = nn.Dropout(dropout)
 
-        utils.init_weights_(self.fc)
+        utils.init_weights_(self.fc1)
 
     def forward(self, dec_state: Tensor, enc_outputs: Tensor) -> Tensor:
         """
         :param dec_state: Tensor
-            Previous or initial decoder state of shape (batch_size, dec_units)
+            Previous or initial decoder state of shape (1, batch_size, dec_units)
         :param enc_outputs: Tensor
             Encoder outputs of shape (source_len, batch_size, 2 * enc_units)
         :return:
-            Attention weights of shape (batch_size, source_len)
+            Attention weights of shape (source_len, batch_size)
         """
         source_len = enc_outputs.shape[0]
 
         # vectorize computation of Bahdanau attention scores for all encoder outputs
-        dec_state = dec_state.unsqueeze(1).repeat(1, source_len, 1)
-        enc_outputs = enc_outputs.permute(1, 0, 2)
-        combined = torch.cat((dec_state, enc_outputs), dim=2)
+        dec_state = dec_state.repeat(source_len, 1, 1)                                  # (batch, len, dec)
+        combined = torch.cat((dec_state, enc_outputs), dim=2)                           # (len, batch, dec + 2 * enc)
         combined = self.dropout(combined)
-        scores = torch.tanh(self.fc(combined))
-        # todo: shouldn't this be fully connected?
-        scores = torch.sum(scores, dim=2)
+        scores = torch.tanh(self.fc1(combined))                                          # (len, batch, units)
+        # scores = torch.sum(scores, dim=2)                                              # (len, batch)
+        scores = self.fc2(scores).squeeze(-1)
 
         weights = softmax(scores, dim=1)
         return weights
@@ -110,29 +114,29 @@ class Decoder(nn.Module):
         :param token: Tensor
             Token of shape (batch_size,)
         :param dec_state:
-            Decoder state of shape (batch_size, dec_units)
+            Decoder state of shape (1, batch_size, dec_units)
         :param context:
             Context vector of shape (1, batch_size, 2 * enc_units)
         :return: Tuple[Tensor, Tensor]
-            Vocabulary scores of shape (batch_size, vocab_size) and decoder state of shape (batch_size, dec_units)
+            Vocabulary scores of shape (batch_size, vocab_size) and decoder state of shape
+            (1, batch_size, dec_units)
         """
-        token = token.unsqueeze(0)
-        embedded = self.embedding(token)
+        token = token.unsqueeze(0)                                          # (1, batch)
+        embedded = self.embedding(token)                                    # (1, batch, embed)
 
-        rnn_input = torch.cat((embedded, context), dim=2)
-        output, dec_state = self.rnn(rnn_input, dec_state.unsqueeze(0))
+        rnn_input = torch.cat((embedded, context), dim=2)                   # (1, batch, 2 * enc + embed)
+        output, dec_state = self.rnn(rnn_input, dec_state)                  # (1, batch, dec), (layers, batch, dec)
 
-        embedded = embedded.squeeze(0)
-        output = output.squeeze(0)
-        context = context.squeeze(0)
+        output = output.squeeze(0)                                          # (batch, dec)
+        context = context.squeeze(0)                                        # (batch, 2 * enc)
+        embedded = embedded.squeeze(0)                                      # (batch, embed)
 
         # compute output using gru output, context vector, and embedding of previous output
-        combined = torch.cat((output, context, embedded), dim=1)
+        combined = torch.cat((output, context, embedded), dim=1)            # (batch, dec + 2 * enc + embed)
         combined = self.dropout(combined)
         output = self.fc(combined)
 
         # return logits (rather than softmax activations) for compatibility with cross-entropy loss
-        dec_state = dec_state.squeeze(0)
         return output, dec_state
 
 
@@ -140,6 +144,7 @@ class EncoderDecoder(nn.Module):
     def __init__(self, device: torch.device,
                  embed_weights_src: Tensor, trg_vocab_size: int,
                  rnn_units: int, attn_units: int,
+                 num_layers: int,
                  dropout: float) -> None:
         """
         :param device: torch.device
@@ -148,15 +153,16 @@ class EncoderDecoder(nn.Module):
         :param trg_vocab_size:
         :param rnn_units: int
         :param attn_units: int
+        :param num_layers: int
         :param dropout: float
         """
         super().__init__()
         self.device = device
         self.trg_vocab_size = trg_vocab_size
 
-        self.encoder = Encoder(embed_weights_src, rnn_units, dropout)
-        self.attention = Attention(rnn_units, attn_units)
+        self.encoder = Encoder(embed_weights_src, rnn_units, num_layers, rnn_units, dropout)
         self.decoder = Decoder(embed_weights_src, rnn_units, dropout, rnn_units, trg_vocab_size)
+        self.attention = Attention(rnn_units, rnn_units, attn_units)
 
     def forward(self, source: Tensor, target: Tensor, teacher_forcing: float = 0.3) -> Tensor:
         """
@@ -165,7 +171,7 @@ class EncoderDecoder(nn.Module):
         :param target:
             Target sequence of shape (trg_len, batch_size)
         :param teacher_forcing: float
-        :return:
+        :return: Tensor
         """
         batch_size = source.shape[1]
         max_len = target.shape[0]
@@ -200,7 +206,7 @@ class EncoderDecoder(nn.Module):
         # initialize distribution over first word
         context = self._compute_context(state, enc_outputs)
         token = torch.tensor([trg_sos], dtype=torch.long, device=self.device)
-        out, state = self.decoder(token, state, context)                        # (1, vocab_size), (1, dec_units)
+        out, state = self.decoder(token, state, context)                        # (1, vocab_size), (1, 1, dec_units)
 
         # compute log-likelihood scores
         probs = softmax(out, dim=1)
@@ -209,7 +215,7 @@ class EncoderDecoder(nn.Module):
         # initialize scores, sequences, and states
         scores, sequences = torch.topk(scores, beam_size, dim=1)                # (1, beam_size), (seq_len=1, beam_size)
         scores = scores.squeeze(0)                                              # (beam_size,)
-        states = state.unsqueeze(0).repeat(beam_size, 1, 1)                     # (beam_size, 1, dec_units)
+        states = state.repeat(beam_size, 1, 1, 1)                               # (beam_size, 1, 1, dec_units)
 
         # main loop over time steps
         for t in range(1, max_len):
@@ -219,7 +225,7 @@ class EncoderDecoder(nn.Module):
                 # run decoder
                 context = self._compute_context(states[i], enc_outputs)
                 token = seq[-1].unsqueeze(0)                                    # (1,)
-                out, states[i] = self.decoder(token, states[i], context)        # (1, vocab_size), (1, dec_units)
+                out, states[i] = self.decoder(token, states[i], context)        # (1, vocab_size), (1, 1, dec_units)
                 # apply softmax
                 probs = softmax(out, dim=1)                                     # (1, vocab_size)
 
@@ -252,13 +258,13 @@ class EncoderDecoder(nn.Module):
     def _compute_context(self, dec_state, enc_outputs):
         """
         :param dec_state: Tensor
-            Decoder state of shape (batch_size, dec_units)
+            Decoder state of shape (1, batch_size, dec_units)
         :param enc_outputs: Tensor
             Encoder outputs of shape (seq_len, batch_size, 2 * enc_units)
         :return:
             Context vector of shape (1, batch_size, 2 * enc_units)
         """
-        weights = self.attention(dec_state, enc_outputs).unsqueeze(1)
-        enc_outputs = enc_outputs.permute(1, 0, 2)
-        context = torch.bmm(weights, enc_outputs).permute(1, 0, 2)
+        weights = self.attention(dec_state, enc_outputs).permute(1, 0).unsqueeze(1)       # (batch, 1, len)
+        enc_outputs = enc_outputs.permute(1, 0, 2)                                      # (batch, len, 2 * enc)
+        context = torch.bmm(weights, enc_outputs).permute(1, 0, 2)                      # (1, batch, 2 * enc)
         return context
