@@ -1,6 +1,7 @@
 import time
+import warnings
 from pathlib import Path
-from typing import List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import mlflow
 import torch
@@ -82,13 +83,14 @@ class Pipeline(object):
         self.optimizer = None
         self.criterion = None
 
-    def load_data(self, dataset_cls: type, max_examples: Union[int, None] = None):
+    def load_data(self, dataset_cls: type, max_examples: Optional[int] = None):
         field_args = {
             'tokenize': 'spacy', 'tokenizer_language': 'en_core_web_sm',
             'init_token': self.SOS_TOKEN, 'eos_token': self.EOS_TOKEN,
             'pad_token': self.PAD_TOKEN, 'unk_token': self.UNK_TOKEN,
             'lower': True, 'preprocessing': utils.preprocess
         }
+        warnings.filterwarnings('ignore', category=DeprecationWarning, lineno=6)
         if self.src is None:
             self.src = Field(**field_args)
         if self.trg is None:
@@ -99,7 +101,7 @@ class Pipeline(object):
 
         return [len(dataset) for dataset in data]
 
-    def load_vectors(self, embed_dim: int, trg_vocab: Union[None, int]) -> Tuple[int, int]:
+    def load_vectors(self, embed_dim: int, trg_vocab: Optional[int]) -> Tuple[int, int]:
         vectors_dir = self.VECTORS_ROOT / 'glove'
         vectors_path = f'glove.6B.{embed_dim}d'
         vocab_args = {'min_freq': self.MIN_FREQ, 'vectors': vectors_path, 'vectors_cache': vectors_dir}

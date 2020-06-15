@@ -38,7 +38,6 @@ class Encoder(nn.Module):
         :return: Tuple[Tensor, Tensor]
             Outputs of shape (seq_len, batch_size, 2 * units) and state of shape (1, batch_size, units)
         """
-        batch_size = source.shape[1]
         embedded = self.embedding(source)
         outputs, state = self.gru(embedded)
 
@@ -61,10 +60,11 @@ class Attention(nn.Module):
         super().__init__()
         self.attn_in = 2 * enc_units + dec_units
 
-        self.fc = nn.Linear(self.attn_in, units)
+        self.fc1 = nn.Linear(self.attn_in, units)
+        self.fc2 = nn.Linear(units, 1)
         self.dropout = nn.Dropout(dropout)
 
-        utils.init_weights_(self.fc)
+        utils.init_weights_(self.fc1)
 
     def forward(self, dec_state: Tensor, enc_outputs: Tensor) -> Tensor:
         """
@@ -81,9 +81,9 @@ class Attention(nn.Module):
         dec_state = dec_state.repeat(source_len, 1, 1)                                  # (batch, len, dec)
         combined = torch.cat((dec_state, enc_outputs), dim=2)                           # (len, batch, dec + 2 * enc)
         combined = self.dropout(combined)
-        scores = torch.tanh(self.fc(combined))                                          # (len, batch, units)
-        # todo: shouldn't this be fully connected?
-        scores = torch.sum(scores, dim=2)                                               # (len, batch)
+        scores = torch.tanh(self.fc1(combined))                                          # (len, batch, units)
+        # scores = torch.sum(scores, dim=2)                                              # (len, batch)
+        scores = self.fc2(scores).squeeze(-1)
 
         weights = softmax(scores, dim=1)
         return weights

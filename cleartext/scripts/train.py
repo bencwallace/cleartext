@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import click
 from click import Choice
+from typing import Optional
 
 import mlflow
 import torch
@@ -26,10 +27,10 @@ MODELS_ROOT = PROJ_ROOT / 'models'
 @click.command()
 @click.argument('dataset', default='wikismall', type=str)
 @click.option('--num_epochs', '-e', default=10, type=int, help='Number of epochs')
-@click.option('--max_examples', '-n', default=0, type=int, help='Max number of training examples')
+@click.option('--max_examples', '-n', required=False, type=int, help='Max number of training examples')
 @click.option('--batch_size', '-b', default=32, type=int, help='Batch size')
 @click.option('--embed_dim', '-d', default='50', type=Choice(['50', '100', '200', '300']), help='Embedding dimension')
-@click.option('--trg_vocab', '-t', default=0, type=int, help='Max target vocabulary size')
+@click.option('--trg_vocab', '-t', required=False, type=int, help='Max target vocabulary size')
 @click.option('--rnn_units', '-r', default=100, type=int, help='Number of RNN units')
 @click.option('--attn_units', '-a', default=100, type=int, help='Number of attention units')
 @click.option('--num_layers', '-l', default=1, type=int, help='Number of layers in each RNN')
@@ -37,8 +38,8 @@ MODELS_ROOT = PROJ_ROOT / 'models'
 @click.option('--alpha', default=0.5, type=float, help='Beam search regularization')
 @click.option('--seed', default=-1, type=int, help='Random seed')
 def main(dataset: str,
-         num_epochs: int, max_examples: int, batch_size: int,
-         embed_dim: str, trg_vocab: int, rnn_units: int, attn_units: int,
+         num_epochs: int, max_examples: Optional[int], batch_size: int,
+         embed_dim: str, trg_vocab: Optional[int], rnn_units: int, attn_units: int,
          num_layers: int,
          dropout: float, alpha: float, seed: int) -> None:
     # parse/validate arguments
@@ -48,7 +49,6 @@ def main(dataset: str,
         dataset = WikiLarge
     else:
         raise ValueError(f'Unknown dataset "{dataset}"')
-    max_examples = max_examples if max_examples else None
     trg_vocab = trg_vocab if trg_vocab else None
 
     # initialize pipeline
