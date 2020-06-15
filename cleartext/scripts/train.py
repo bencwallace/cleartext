@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import click
+import tempfile
 from click import Choice
 from typing import Optional
 
@@ -82,7 +83,7 @@ def main(dataset: str,
     print(f'Training model for {num_epochs} epochs')
     if seed > 0:
         torch.manual_seed(seed)
-    pipeline.train(num_epochs)
+    epoch = pipeline.train(num_epochs)
 
     # reload last checkpoint (without losing dataset)
     pl_dict = torch.load(pipeline.root / f'model{pipeline.model_index:02}.pt', map_location=pipeline.device)
@@ -93,11 +94,11 @@ def main(dataset: str,
     print('\nEvaluating model')
     train_loss, valid_loss, test_loss, bleu = pipeline.evaluate(alpha=alpha)
     mlflow.log_metrics({
-        'train_loss_final': train_loss,
-        'valid_loss_final': valid_loss,
-        'test_loss_final': test_loss,
+        'train_loss': train_loss,
+        'valid_loss': valid_loss,
+        'test_loss': test_loss,
         'bleu_score': bleu
-    })
+    }, step=epoch)
     utils.print_loss(train_loss, 'Train')
     utils.print_loss(valid_loss, 'Valid')
     utils.print_loss(test_loss, 'Test')
@@ -124,12 +125,13 @@ def main(dataset: str,
         print(output_out)
 
     # save sample outputs
-    path = str(pipeline.model_path) + '.txt'
+    _, path = tempfile.mkstemp(prefix='samples-', suffix='.txt')
     with open(path, 'w') as f:
         for source_out, target_out, output_out in zip(source_print, target_print, output_print):
             f.write(source_out + '\n')
             f.write(target_out + '\n')
             f.write(output_out + '\n')
+    mlflow.log_artifact(path, 'samples')
 
 
 if __name__ == '__main__':

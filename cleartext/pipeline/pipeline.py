@@ -129,7 +129,7 @@ class Pipeline(object):
 
         return utils.count_parameters(self.model)
 
-    def train(self, num_epochs: int) -> None:
+    def train(self, num_epochs: int) -> int:
         best_valid_loss = float('inf')
         valid_hist = [best_valid_loss, best_valid_loss]
         for epoch in range(num_epochs):
@@ -163,7 +163,7 @@ class Pipeline(object):
                     'loss_state_dict': self.criterion.state_dict()
                 }, self.model_path)
             elif valid_hist[-1] > valid_hist[-2] > valid_hist[-3]:
-                break
+                return epoch + 1
 
     def evaluate(self, beam_size: int = 10, max_len: int = 30, alpha: float = 1) -> Tuple[float, float, float, float]:
         # Compute losses
