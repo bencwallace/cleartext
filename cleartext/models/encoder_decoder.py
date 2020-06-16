@@ -90,7 +90,7 @@ class Attention(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, embed_weights: Tensor, units: int, dropout: float, enc_units: int, vocab_size: int) -> None:
+    def __init__(self, embed_weights: Tensor, units: int, dropout: float, enc_units: int) -> None:
         """
         :param embed_weights: Tensor
             Embedding weights of shape (trg_vocab_size, embed_dim)
@@ -98,10 +98,9 @@ class Decoder(nn.Module):
         :param dropout: float
         """
         super().__init__()
-        self.vocab_size = vocab_size
-        embed_dim = embed_weights.shape[1]
+        self.vocab_size, embed_dim = embed_weights.shape
 
-        self.embedding = nn.Embedding.from_pretrained(embed_weights)
+        self.embedding = nn.Embedding.from_pretrained(embed_weights)                    #
         self.rnn = nn.GRU((units * 2) + embed_dim, units)
         self.fc = nn.Linear(units + 2 * enc_units + embed_dim, self.vocab_size)
         self.dropout = nn.Dropout(dropout)
@@ -142,7 +141,7 @@ class Decoder(nn.Module):
 
 class EncoderDecoder(nn.Module):
     def __init__(self, device: torch.device,
-                 embed_weights_src: Tensor, trg_vocab_size: int,
+                 embed_weights_src: Tensor, embed_weights_trg: Tensor,
                  rnn_units: int, attn_units: int,
                  num_layers: int,
                  dropout: float) -> None:
@@ -158,10 +157,10 @@ class EncoderDecoder(nn.Module):
         """
         super().__init__()
         self.device = device
-        self.trg_vocab_size = trg_vocab_size
+        self.trg_vocab_size = embed_weights_trg.shape[0]
 
         self.encoder = Encoder(embed_weights_src, rnn_units, num_layers, rnn_units, dropout)
-        self.decoder = Decoder(embed_weights_src, rnn_units, dropout, rnn_units, trg_vocab_size)
+        self.decoder = Decoder(embed_weights_trg, rnn_units, dropout, rnn_units)
         self.attention = Attention(rnn_units, rnn_units, attn_units)
 
     def forward(self, source: Tensor, target: Tensor, teacher_forcing: float = 0.3) -> Tensor:

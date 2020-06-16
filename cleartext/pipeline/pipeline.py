@@ -121,7 +121,7 @@ class Pipeline(object):
     def build_model(self, rnn_units: int, attn_units: int, num_layers: int, dropout: float) -> Tuple[int, int]:
         self.model_index += 1
         self.model_path = self.root / f'model{self.model_index:02}.pt'
-        self.model = EncoderDecoder(self.device, self.src.vocab.vectors, len(self.trg.vocab),
+        self.model = EncoderDecoder(self.device, self.src.vocab.vectors, self.trg.vocab.vectors,
                                     rnn_units, attn_units, num_layers, dropout).to(self.device)
 
         self.optimizer = optim.Adam(self.model.parameters())
