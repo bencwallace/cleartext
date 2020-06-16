@@ -101,11 +101,11 @@ class Pipeline(object):
 
         return [len(dataset) for dataset in data]
 
-    def load_vectors(self, embed_dim: int, trg_vocab: Optional[int]) -> Tuple[int, int]:
+    def load_vectors(self, embed_dim: int, src_vocab: Optional[int], trg_vocab: Optional[int]) -> Tuple[int, int]:
         vectors_dir = self.VECTORS_ROOT / 'glove'
         glove = f'glove.6B.{embed_dim}d'
         vocab_args = {'min_freq': self.MIN_FREQ, 'vectors': glove, 'vectors_cache': vectors_dir}
-        self.src.build_vocab(self.train_data, **vocab_args)
+        self.src.build_vocab(self.train_data, max_size=src_vocab, **vocab_args)
         self.trg.build_vocab(self.train_data, max_size=trg_vocab, **vocab_args)
 
         torch.save(self.src, self.root / f'src.pt')
@@ -197,30 +197,31 @@ class Pipeline(object):
         :return:
             List of tokens
         """
-        sos_index = self.src.vocab.stoi[self.SOS_TOKEN]
-        eos_index = self.trg.vocab.stoi[self.EOS_TOKEN]
+        with torch.no_grad():
+            sos_index = self.src.vocab.stoi[self.SOS_TOKEN]
+            eos_index = self.trg.vocab.stoi[self.EOS_TOKEN]
 
-        # run beam search
-        source_tensor = self.src.process([source]).to(self.device)
-        source_tensor = source_tensor.squeeze(1)
-        beam_search_results = self.model.beam_search(source_tensor, beam_size, sos_index, max_len)
-        output_tensor, scores = beam_search_results                     # (max_len, beam_size), (beam_size,)
+            # run beam search
+            source_tensor = self.src.process([source]).to(self.device)
+            source_tensor = source_tensor.squeeze(1)
+            beam_search_results = self.model.beam_search(source_tensor, beam_size, sos_index, max_len)
+            output_tensor, scores = beam_search_results                     # (max_len, beam_size), (beam_size,)
 
-        # find ends of sequences
-        lengths = torch.empty(beam_size, dtype=torch.long, device=self.device)
-        for beam in range(beam_size):
-            try:
-                index = output_tensor[:, beam].tolist().index(eos_index)
-                lengths[beam] = index
-            except ValueError:
-                lengths[beam] = max_len
+            # find ends of sequences
+            lengths = torch.empty(beam_size, dtype=torch.long, device=self.device)
+            for beam in range(beam_size):
+                try:
+                    index = output_tensor[:, beam].tolist().index(eos_index)
+                    lengths[beam] = index
+                except ValueError:
+                    lengths[beam] = max_len
 
-        # normalize scores and select winning sequence
-        scores = scores / lengths ** alpha                              # (beam_size,)
-        idx = torch.argmax(scores)
-        winner_len = lengths[idx]
-        winner = output_tensor[:winner_len, idx]
+            # normalize scores and select winning sequence
+            scores = scores / lengths ** alpha                              # (beam_size,)
+            idx = torch.argmax(scores)
+            winner_len = lengths[idx]
+            winner = output_tensor[:winner_len, idx]
 
-        # todo: use utils.seq_to_sentence -- first figure out why not getting <unk>
-        result = [self.trg.vocab.itos[d] for d in winner]
-        return result
+            # todo: use utils.seq_to_sentence -- first figure out why not getting <unk>
+            result = [self.trg.vocab.itos[d] for d in winner]
+            return result

@@ -8,3 +8,5 @@ data/*
 vectors/*
 models/*
 mlruns/*
+
+*.pyc

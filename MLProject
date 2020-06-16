@@ -10,6 +10,7 @@ entry_points:
       max-examples: {type: int, default: 0}
       batch-size: {type: int, default: 32}
       embed-dim: {type: int, default: 50}
+      src-vocab: {type: int, default: 0}
       trg-vocab: {type: int, default: 0}
       rnn-units: {type: int, default: 100}
       attn-units: {type: int, default: 100}
@@ -24,6 +25,7 @@ entry_points:
         --max_examples {max-examples} \
         --batch_size {batch-size} \
         --embed_dim {embed-dim} \
+        --src_vocab {src-vocab} \
         --trg_vocab {trg-vocab} \
         --rnn_units {rnn-units} \
         --attn_units {attn-units} \
