@@ -31,6 +31,7 @@ MODELS_ROOT = PROJ_ROOT / 'models'
 @click.option('--max_examples', '-n', required=False, type=int, help='Max number of training examples')
 @click.option('--batch_size', '-b', default=32, type=int, help='Batch size')
 @click.option('--embed_dim', '-d', default='50', type=Choice(['50', '100', '200', '300']), help='Embedding dimension')
+@click.option('--src_vocab', '-s', required=False, type=int, help='Max source vocabulary size')
 @click.option('--trg_vocab', '-t', required=False, type=int, help='Max target vocabulary size')
 @click.option('--rnn_units', '-r', default=100, type=int, help='Number of RNN units')
 @click.option('--attn_units', '-a', default=100, type=int, help='Number of attention units')
@@ -40,7 +41,8 @@ MODELS_ROOT = PROJ_ROOT / 'models'
 @click.option('--seed', required=False, type=int, help='Random seed')
 def main(dataset: str,
          num_epochs: int, max_examples: Optional[int], batch_size: int,
-         embed_dim: str, trg_vocab: Optional[int], rnn_units: int, attn_units: int,
+         embed_dim: str, trg_vocab: Optional[int], src_vocab: Optional[int],
+         rnn_units: int, attn_units: int,
          num_layers: int,
          dropout: float, alpha: float, seed: Optional[int] = None) -> None:
     # parse/validate arguments
@@ -50,6 +52,7 @@ def main(dataset: str,
         dataset = WikiLarge
     else:
         raise ValueError(f'Unknown dataset "{dataset}"')
+    src_vocab = src_vocab if src_vocab else None
     trg_vocab = trg_vocab if trg_vocab else None
 
     # initialize pipeline
@@ -65,7 +68,7 @@ def main(dataset: str,
 
     # load embeddings
     print(f'Loading {embed_dim}-dimensional GloVe vectors')
-    src_vocab_size, trg_vocab_size = pipeline.load_vectors(int(embed_dim), trg_vocab)
+    src_vocab_size, trg_vocab_size = pipeline.load_vectors(int(embed_dim), src_vocab, trg_vocab)
     print(f'Source vocabulary size: {src_vocab_size}')
     print(f'Target vocabulary size: {trg_vocab_size}')
     print()

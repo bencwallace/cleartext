@@ -101,11 +101,11 @@ class Pipeline(object):
 
         return [len(dataset) for dataset in data]
 
-    def load_vectors(self, embed_dim: int, trg_vocab: Optional[int]) -> Tuple[int, int]:
+    def load_vectors(self, embed_dim: int, src_vocab: Optional[int], trg_vocab: Optional[int]) -> Tuple[int, int]:
         vectors_dir = self.VECTORS_ROOT / 'glove'
         glove = f'glove.6B.{embed_dim}d'
         vocab_args = {'min_freq': self.MIN_FREQ, 'vectors': glove, 'vectors_cache': vectors_dir}
-        self.src.build_vocab(self.train_data, **vocab_args)
+        self.src.build_vocab(self.train_data, max_size=src_vocab, **vocab_args)
         self.trg.build_vocab(self.train_data, max_size=trg_vocab, **vocab_args)
 
         torch.save(self.src, self.root / f'src.pt')
