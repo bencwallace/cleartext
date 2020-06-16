@@ -81,7 +81,7 @@ def main(dataset: str,
 
     # run training loop
     print(f'Training model for {num_epochs} epochs')
-    if seed >= 0:
+    if seed and seed >= 0:
         torch.manual_seed(seed)
     epoch = pipeline.train(num_epochs)
 

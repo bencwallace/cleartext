@@ -197,30 +197,31 @@ class Pipeline(object):
         :return:
             List of tokens
         """
-        sos_index = self.src.vocab.stoi[self.SOS_TOKEN]
-        eos_index = self.trg.vocab.stoi[self.EOS_TOKEN]
+        with torch.no_grad():
+            sos_index = self.src.vocab.stoi[self.SOS_TOKEN]
+            eos_index = self.trg.vocab.stoi[self.EOS_TOKEN]
 
-        # run beam search
-        source_tensor = self.src.process([source]).to(self.device)
-        source_tensor = source_tensor.squeeze(1)
-        beam_search_results = self.model.beam_search(source_tensor, beam_size, sos_index, max_len)
-        output_tensor, scores = beam_search_results                     # (max_len, beam_size), (beam_size,)
+            # run beam search
+            source_tensor = self.src.process([source]).to(self.device)
+            source_tensor = source_tensor.squeeze(1)
+            beam_search_results = self.model.beam_search(source_tensor, beam_size, sos_index, max_len)
+            output_tensor, scores = beam_search_results                     # (max_len, beam_size), (beam_size,)
 
-        # find ends of sequences
-        lengths = torch.empty(beam_size, dtype=torch.long, device=self.device)
-        for beam in range(beam_size):
-            try:
-                index = output_tensor[:, beam].tolist().index(eos_index)
-                lengths[beam] = index
-            except ValueError:
-                lengths[beam] = max_len
+            # find ends of sequences
+            lengths = torch.empty(beam_size, dtype=torch.long, device=self.device)
+            for beam in range(beam_size):
+                try:
+                    index = output_tensor[:, beam].tolist().index(eos_index)
+                    lengths[beam] = index
+                except ValueError:
+                    lengths[beam] = max_len
 
-        # normalize scores and select winning sequence
-        scores = scores / lengths ** alpha                              # (beam_size,)
-        idx = torch.argmax(scores)
-        winner_len = lengths[idx]
-        winner = output_tensor[:winner_len, idx]
+            # normalize scores and select winning sequence
+            scores = scores / lengths ** alpha                              # (beam_size,)
+            idx = torch.argmax(scores)
+            winner_len = lengths[idx]
+            winner = output_tensor[:winner_len, idx]
 
-        # todo: use utils.seq_to_sentence -- first figure out why not getting <unk>
-        result = [self.trg.vocab.itos[d] for d in winner]
-        return result
+            # todo: use utils.seq_to_sentence -- first figure out why not getting <unk>
+            result = [self.trg.vocab.itos[d] for d in winner]
+            return result
