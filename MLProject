@@ -16,7 +16,7 @@ entry_points:
       attn-units: {type: int, default: 100}
       dropout: {type: float, default: 0.2}
       alpha: {type: float, default: 0.5}
-      seed: {type: int, default: -1}
+      seed: {type: str, default: ''}
     command: |
       python -m cleartext.scripts.train \
         {dataset} \

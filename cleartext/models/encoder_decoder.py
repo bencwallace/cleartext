@@ -57,11 +57,12 @@ class Attention(nn.Module):
         super().__init__()
         self.attn_in = 2 * enc_units + dec_units
 
-        self.fc1 = nn.Linear(self.attn_in, units)
+        self.fc = nn.Linear(self.attn_in, units)
         self.fc2 = nn.Linear(units, 1)
         self.dropout = nn.Dropout(dropout)
 
-        utils.init_weights_(self.fc1)
+        utils.init_weights_(self.fc)
+        utils.init_weights_(self.fc2)
 
     def forward(self, dec_state: Tensor, enc_outputs: Tensor) -> Tensor:
         """
@@ -79,9 +80,8 @@ class Attention(nn.Module):
         enc_outputs = enc_outputs.permute(1, 0, 2)
         combined = torch.cat((dec_state, enc_outputs), dim=2)
         combined = self.dropout(combined)
-        scores = torch.tanh(self.fc1(combined))                                          # (len, batch, units)
+        scores = torch.tanh(self.fc(combined))                                          # (len, batch, units)
         scores = self.fc2(scores).squeeze(-1)
-        # scores = torch.tanh(self.fc(combined))
         # scores = torch.sum(scores, dim=2)
 
         weights = softmax(scores, dim=1)
@@ -224,7 +224,7 @@ class EncoderDecoder(nn.Module):
                 # apply softmax
                 probs = softmax(out, dim=1)                                     # (1, vocab_size)
                 # mask out <unk>
-                probs[trg_unk] = 0
+                probs[0, trg_unk] = 0
 
                 # update scores
                 curr_score = scores[i].item()

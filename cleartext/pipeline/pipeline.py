@@ -1,3 +1,4 @@
+import random
 import time
 import warnings
 from pathlib import Path
@@ -113,7 +114,10 @@ class Pipeline(object):
 
         return len(self.src.vocab), len(self.trg.vocab)
 
-    def prepare_data(self, batch_size: int) -> None:
+    def prepare_data(self, batch_size: int, seed: Optional[int] = None) -> None:
+        # `BucketIterator` makes use of global `random` state
+        if seed:
+            random.seed(seed)
         iterators = BucketIterator.splits((self.train_data, self.valid_data, self.test_data),
                                           batch_size=batch_size, device=self.device)
         self.train_iter, self.valid_iter, self.test_iter = iterators
@@ -200,7 +204,7 @@ class Pipeline(object):
             List of tokens
         """
         with torch.no_grad():
-            sos_index = self.src.vocab.stoi[self.SOS_TOKEN]
+            sos_index = self.trg.vocab.stoi[self.SOS_TOKEN]
             eos_index = self.trg.vocab.stoi[self.EOS_TOKEN]
             unk_index = self.trg.vocab.stoi[self.UNK_TOKEN]
 
@@ -225,6 +229,6 @@ class Pipeline(object):
             winner_len = lengths[idx]
             winner = output_tensor[:winner_len, idx]
 
-            # todo: use utils.seq_to_sentence -- first figure out why not getting <unk>
+            # todo: use utils.seq_to_sentence
             result = [self.trg.vocab.itos[d] for d in winner]
             return result

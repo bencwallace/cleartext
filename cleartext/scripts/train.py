@@ -37,12 +37,12 @@ MODELS_ROOT = PROJ_ROOT / 'models'
 @click.option('--attn_units', '-a', default=100, type=int, help='Number of attention units')
 @click.option('--dropout', '-p', default=0.3, type=float, help='Dropout probability')
 @click.option('--alpha', default=0.5, type=float, help='Beam search regularization')
-@click.option('--seed', required=False, type=int, help='Random seed')
+@click.option('--seed', required=False, type=str, help='Random seed')
 def main(dataset: str,
          num_epochs: int, max_examples: Optional[int], batch_size: int,
          embed_dim: str, src_vocab: Optional[int], trg_vocab: Optional[int],
          rnn_units: int, attn_units: int,
-         dropout: float, alpha: float, seed: Optional[int] = None) -> None:
+         dropout: float, alpha: float, seed: Optional[str] = None) -> None:
     # parse/validate arguments
     if dataset.lower() == 'wikismall':
         dataset = WikiSmall
@@ -50,7 +50,9 @@ def main(dataset: str,
         dataset = WikiLarge
     else:
         raise ValueError(f'Unknown dataset "{dataset}"')
+    src_vocab = src_vocab if src_vocab else None
     trg_vocab = trg_vocab if trg_vocab else None
+    seed = int(seed) if seed else None
 
     # initialize pipeline
     pipeline = Pipeline()
@@ -71,18 +73,18 @@ def main(dataset: str,
     print()
 
     # prepare data
-    pipeline.prepare_data(batch_size)
+    pipeline.prepare_data(batch_size, seed)
 
     # build model and prepare optimizer and loss
     print('Building model')
+    if seed is not None:
+        torch.manual_seed(seed)
     trainable, total = pipeline.build_model(rnn_units, attn_units, dropout)
     print(f'Trainable parameters: {trainable} | Total parameters: {total}')
     print()
 
     # run training loop
     print(f'Training model for {num_epochs} epochs')
-    if seed and seed >= 0:
-        torch.manual_seed(seed)
     epoch = pipeline.train(num_epochs)
 
     # reload last checkpoint (without losing dataset)
