@@ -79,6 +79,10 @@ class Pipeline(object):
         self.valid_iter = None
         self.test_iter = None
 
+        self.rnn_units = None
+        self.attn_units = None
+        self.dropout = None
+
         self.model_path = None
         self.model = None
         self.optimizer = None
@@ -123,6 +127,10 @@ class Pipeline(object):
         self.train_iter, self.valid_iter, self.test_iter = iterators
 
     def build_model(self, rnn_units: int, attn_units: int, dropout: float) -> Tuple[int, int]:
+        self.rnn_units = rnn_units
+        self.attn_units = attn_units
+        self.dropout = dropout
+
         self.model_index += 1
         self.model_path = self.root / f'model{self.model_index:02}.pt'
         self.model = EncoderDecoder(self.device, self.src.vocab.vectors, self.trg.vocab.vectors,
@@ -164,6 +172,9 @@ class Pipeline(object):
                 best_valid_loss = valid_loss
                 torch.save({
                     'device': self.device,
+                    'rnn_units': self.rnn_units,
+                    'attn_units': self.attn_units,
+                    'dropout': self.dropout,
                     'model_state_dict': self.model.state_dict(),
                     'optimizer_state_dict': self.optimizer.state_dict(),
                     'loss_state_dict': self.criterion.state_dict()

@@ -8,7 +8,7 @@ BEAM_SIZE = 6
 MAX_LEN = 50
 
 MODELS_ROOT = PROJ_ROOT / 'models'
-MODEL_DIR = MODELS_ROOT / '10-11'
+MODEL_DIR = MODELS_ROOT / 'jun-17-fixed'
 
 pl = Pipeline.deserialize(MODEL_DIR)
 
