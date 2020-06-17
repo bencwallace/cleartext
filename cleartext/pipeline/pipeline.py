@@ -202,11 +202,12 @@ class Pipeline(object):
         with torch.no_grad():
             sos_index = self.src.vocab.stoi[self.SOS_TOKEN]
             eos_index = self.trg.vocab.stoi[self.EOS_TOKEN]
+            unk_index = self.trg.vocab.stoi[self.UNK_TOKEN]
 
             # run beam search
             source_tensor = self.src.process([source]).to(self.device)
             source_tensor = source_tensor.squeeze(1)
-            beam_search_results = self.model.beam_search(source_tensor, beam_size, sos_index, max_len)
+            beam_search_results = self.model.beam_search(source_tensor, beam_size, sos_index, max_len, unk_index)
             output_tensor, scores = beam_search_results                     # (max_len, beam_size), (beam_size,)
 
             # find ends of sequences

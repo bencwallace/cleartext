@@ -183,7 +183,7 @@ class EncoderDecoder(nn.Module):
 
         return outputs
 
-    def beam_search(self, source: Tensor, beam_size: int, trg_sos: int, max_len: int) -> Tuple[Tensor, Tensor]:
+    def beam_search(self, source: Tensor, beam_size: int, trg_sos: int, max_len: int, trg_unk: int) -> Tuple[Tensor, Tensor]:
         """
         :param source: Tensor
             Source sequence of shape (src_len,)
@@ -223,6 +223,8 @@ class EncoderDecoder(nn.Module):
                 out, states[i] = self.decoder(token, states[i], context)        # (1, vocab_size), (1, dec_units)
                 # apply softmax
                 probs = softmax(out, dim=1)                                     # (1, vocab_size)
+                # mask out <unk>
+                probs[trg_unk] = 0
 
                 # update scores
                 curr_score = scores[i].item()
@@ -237,7 +239,6 @@ class EncoderDecoder(nn.Module):
             new_sequences = torch.empty(0, dtype=torch.long, device=self.device)
             # loop through `beam_size` number of candidates and build each one
             for idx in indices:
-                idx.item()
                 # convert idx into corresponding sequence and additional token (notice all_scores.shape above)
                 seq_index = idx // self.trg_vocab_size
                 vocab_index = idx % self.trg_vocab_size
