@@ -9,17 +9,36 @@ from .components import Encoder, Attention, Decoder
 
 
 class EncoderDecoder(nn.Module):
+    """Encoder-decoder (or sequence-to-sequence) model.
+
+    Attributes
+    ----------
+    device: torch.device
+        Device on which model is loaded.
+    trg_vocab_size: int
+        Size of the target vocabulary.
+    encoder: Module
+        Encoder sub-module.
+    decoder: Module
+        Decoder sub-module.
+    attention: Module
+        Attention sub-module.
+    """
     def __init__(self, device: torch.device,
                  embed_weights_src: Tensor, embed_weights_trg: Tensor,
                  rnn_units: int, attn_units: int,
                  dropout: float) -> None:
         """
         :param device: torch.device
+            Device on which to load the model.
         :param embed_weights_src: Tensor
             Embedding weights of shape (src_vocab_size, embed_dim)
         :param rnn_units: int
+            Number of hidden units in all sub-module RNNs.
         :param attn_units: int
+            Number of hidden units in attention layer.
         :param dropout: float
+            Dropout probability.
         """
         super().__init__()
         self.device = device
@@ -30,13 +49,19 @@ class EncoderDecoder(nn.Module):
         self.attention = Attention(rnn_units, rnn_units, attn_units)
 
     def forward(self, source: Tensor, target: Tensor, teacher_forcing: float = 0.3) -> Tensor:
-        """
+        """Translates a source sequence into an output sequence using teacher forcing.
+
+        Teacher forcing is used to randomly select, at each time-step, whether or not to use the target output or the
+        previous output as input to the decoder.
+
         :param source: Tensor
-            Source sequence of shape (src_len, batch_size)
+            Source sequence of shape (src_len, batch_size).
         :param target:
-            Target sequence of shape (trg_len, batch_size)
+            Target sequence of shape (trg_len, batch_size).
         :param teacher_forcing: float
-        :return:
+            Teacher forcing probability.
+        :return: Tensor
+            Output tensor of shape (trg_len, batch_size).
         """
         batch_size = source.shape[1]
         max_len = target.shape[0]
@@ -54,14 +79,18 @@ class EncoderDecoder(nn.Module):
         return outputs
 
     def beam_search(self, source: Tensor, beam_size: int, trg_sos: int, max_len: int, trg_unk: int) -> Tuple[Tensor, Tensor]:
-        """
+        """Translate a source sequence into an output sequence using beam search.
+
         :param source: Tensor
-            Source sequence of shape (src_len,)
+            Source sequence of shape (src_len,).
         :param beam_size: int
+            The beam size.
         :param trg_sos: int
+            Target start-of-sentence index, used to initialize output.
         :param max_len: int
+            Maximum output length.
         :return: Tuple[Tensor, Tensor]
-            Un-trimmed output sequences of shape (max_len, beam_size) and *unnormalized* scores of shape (beam_size,)
+            Un-trimmed output sequences of shape (max_len, beam_size) and *unnormalized* scores of shape (beam_size,).
         """
         self.eval()
 
@@ -122,13 +151,14 @@ class EncoderDecoder(nn.Module):
         return sequences, scores
 
     def _compute_context(self, dec_state, enc_outputs):
-        """
+        """Computes a context vector using the attention module.
+
         :param dec_state: Tensor
-            Decoder state of shape (batch_size, dec_units)
+            Decoder state of shape (batch_size, dec_units).
         :param enc_outputs: Tensor
-            Encoder outputs of shape (seq_len, batch_size, 2 * enc_units)
+            Encoder outputs of shape (seq_len, batch_size, 2 * enc_units).
         :return:
-            Context vector of shape (1, batch_size, 2 * enc_units)
+            Context vector of shape (1, batch_size, 2 * enc_units).
         """
         weights = self.attention(dec_state, enc_outputs).unsqueeze(1)
         enc_outputs = enc_outputs.permute(1, 0, 2)
