@@ -149,8 +149,8 @@ class Pipeline(object):
         for epoch in range(num_epochs):
             # perform step
             start_time = time.time()
-            train_loss = utils.train_step(self.model, self.train_iter, self.criterion, self.optimizer)
-            valid_loss = utils.eval_step(self.model, self.valid_iter, self.criterion)
+            train_loss = utils.train(self.model, self.train_iter, self.criterion, self.optimizer)
+            valid_loss = utils.evaluate(self.model, self.valid_iter, self.criterion)
             end_time = time.time()
             elapsed = end_time - start_time
 
@@ -184,9 +184,9 @@ class Pipeline(object):
 
     def evaluate(self, beam_size: int = 10, max_len: int = 30, alpha: float = 1) -> Tuple[float, float, float, float]:
         # Compute losses
-        train_loss = utils.eval_step(self.model, self.train_iter, self.criterion)
-        valid_loss = utils.eval_step(self.model, self.valid_iter, self.criterion)
-        test_loss = utils.eval_step(self.model, self.test_iter, self.criterion)
+        train_loss = utils.evaluate(self.model, self.train_iter, self.criterion)
+        valid_loss = utils.evaluate(self.model, self.valid_iter, self.criterion)
+        test_loss = utils.evaluate(self.model, self.test_iter, self.criterion)
 
         # Run beam search on test data
         sources, targets = zip(*((e.src, e.trg) for e in self.test_data))

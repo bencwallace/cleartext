@@ -7,7 +7,7 @@ from torchtext.data import Iterator
 CLIP = 1
 
 
-def train_step(model: Module, iterator: Iterator, criterion: Module, optimizer: Optimizer) -> float:
+def train(model: Module, iterator: Iterator, criterion: Module, optimizer: Optimizer) -> float:
     """Perform a single training step (epoch).
 
     :param model: Module
@@ -41,7 +41,7 @@ def train_step(model: Module, iterator: Iterator, criterion: Module, optimizer: 
     return epoch_loss / len(iterator)
 
 
-def eval_step(model: Module, iterator: Iterator, criterion: Module) -> float:
+def evaluate(model: Module, iterator: Iterator, criterion: Module) -> float:
     """Evaluate a model over a batched dataset.
 
     :param model: Module
