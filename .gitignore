@@ -10,3 +10,4 @@ models/*
 mlruns/*
 
 *.pyc
+/chrome/cleartext.zip
