@@ -1,4 +1,4 @@
-let URL = "http://localhost:5000/"
+let URL = "http://ec2-3-215-190-150.compute-1.amazonaws.com:5000/"
 
 var xhttp = new XMLHttpRequest();
 xhttp.onreadystatechange = function() {

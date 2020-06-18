@@ -6,3 +6,4 @@ click~=7.1.2
 pytest~=5.4.2
 flask~=1.1.2
 https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-2.2.0/en_core_web_sm-2.2.0.tar.gz#egg=en_core_web_sm
+mlflow~=1.8.0
