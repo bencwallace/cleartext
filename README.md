@@ -39,10 +39,10 @@ difficulty they encounter and the crudeness of existing forms of assistance, suc
 
 ClearText solves this problem through the use of text simplification technology.
 
-## The Nuts and Bolts
+## Details and Development
 
-We train a sequence-to-sequence model using the WikiSmall/WikiLarge datasets. For more on these datasets, take a look at
-the [notebook][].
+ClearText uses sequence-to-sequence model trained on the WikiSmall/WikiLarge datasets. For more on these datasets, take a look at
+the [notebook][]. A high-level overview of the development of ClearText can be found in [these slides][]
 
 ### Package Installation
 
@@ -84,6 +84,7 @@ mlflow run -P num-epochs=10 -P rnn-units=100 .
 
 [notebook]: notebooks/cleartext.ipynb
 [scripts]: https://github.com/bencwallace/cleartext/tree/master/scripts
+[these slides]: https://docs.google.com/presentation/d/1X-X74s5Db-YFYO9kv7kX1GYn6aSDT_UkXKY-Jlb7cjo/edit?usp=sharing
 
 [1]: https://www.internationalteflacademy.com/blog/report-from-tesol-2-billion-english-learners-worldwide
 [2]: https://www.duolingo.com/
