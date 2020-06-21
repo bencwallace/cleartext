@@ -123,7 +123,7 @@ class EncoderDecoder(nn.Module):
                 # apply softmax
                 probs = softmax(out, dim=1)                                     # (1, vocab_size)
                 # mask out <unk>
-                probs[0, trg_unk] = 0
+                # probs[0, trg_unk] = 0
 
                 # update scores
                 curr_score = scores[i].item()

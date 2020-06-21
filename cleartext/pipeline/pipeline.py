@@ -203,10 +203,10 @@ class Pipeline(object):
 
         return train_loss, valid_loss, test_loss, bleu
 
-    def beam_search(self, source, beam_size: int, max_len: int, alpha: float = 1) -> List[str]:
+    def beam_search(self, source: List[str], beam_size: int, max_len: int, alpha: float = 1) -> List[str]:
         """
         :param source:
-            Iterator over tokens
+            List of tokens
         :param beam_size: int
         :param max_len: int
         :param alpha: float
@@ -240,6 +240,5 @@ class Pipeline(object):
             winner_len = lengths[idx]
             winner = output_tensor[:winner_len, idx]
 
-            # todo: use utils.seq_to_sentence
             result = [self.trg.vocab.itos[d] for d in winner]
             return result
