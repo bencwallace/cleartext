@@ -18,6 +18,10 @@ from ..models import EncoderDecoder
 
 
 class Pipeline(object):
+    """Simplification pipeline.
+
+    Can be used to load and prepare data, build, train, and evaluate a model, and decoder sequences using beam search.
+    """
     EOS_TOKEN = '<eos>'
     SOS_TOKEN = '<sos>'
     PAD_TOKEN = '<pad>'
@@ -31,6 +35,14 @@ class Pipeline(object):
 
     @classmethod
     def deserialize(cls, path: Union[str, Path], index=1):
+        """Deserialize a pipeline consisting of tokenizers and a model.
+
+        :param path: str or Path
+            Path to the directory containing tokenizers and model.
+        :param index: int
+            Model index.
+        :return: Pipeline
+        """
         # assume saved on gpu
         device = utils.get_device()
 
@@ -63,6 +75,11 @@ class Pipeline(object):
         return pipeline
 
     def __init__(self, name: str = 'pl'):
+        """Initialize a pipeline with a given name.
+
+        :param name: str
+            Pipeline name.
+        """
         (self.MODELS_ROOT / name).mkdir(exist_ok=True)
         self.root = self.MODELS_ROOT / name
         self.device = utils.get_device()
@@ -88,7 +105,16 @@ class Pipeline(object):
         self.optimizer = None
         self.criterion = None
 
-    def load_data(self, dataset_cls: type, max_examples: Optional[int] = None):
+    def load_data(self, dataset_cls: type, max_examples: Optional[int] = None) -> List[int]:
+        """Load a dataset.
+
+        :param dataset_cls: type
+            Dataset type (WikiSmall or WikiLarge).
+        :param max_examples: int, optional
+            Maximum number of training examples to load. Default is to load all examples.
+        :return: List[int]
+            Sizes of training, validation, and test sets, respectively.
+        """
         field_args = {
             'tokenize': 'spacy', 'tokenizer_language': 'en_core_web_sm',
             'init_token': self.SOS_TOKEN, 'eos_token': self.EOS_TOKEN,
@@ -107,6 +133,19 @@ class Pipeline(object):
         return [len(dataset) for dataset in data]
 
     def load_vectors(self, embed_dim: int, src_vocab: Optional[int], trg_vocab: Optional[int]) -> Tuple[int, int]:
+        """Load word embedding vectors.
+
+        Must be called after calling `load_data`.
+
+        :param embed_dim: int
+            Embedding dimension.
+        :param src_vocab: int
+            Maximum source vocabulary size.
+        :param trg_vocab: int
+            Maximum target vocabulary size.
+        :return: Tuple[int, int]
+            Source and target vocabulary sizes, respectively.
+        """
         vectors_dir = self.VECTORS_ROOT / 'glove'
         glove = f'glove.6B.{embed_dim}d'
         vocab_args = {'min_freq': self.MIN_FREQ, 'vectors': glove, 'vectors_cache': vectors_dir}
@@ -119,6 +158,16 @@ class Pipeline(object):
         return len(self.src.vocab), len(self.trg.vocab)
 
     def prepare_data(self, batch_size: int, seed: Optional[int] = None) -> None:
+        """Prepare loaded dataset into batches.
+
+        Must be called after calling `load_data`.
+
+        :param batch_size: int
+            Batch size.
+        :param seed: int, optional
+            Random seed.
+        :return: None
+        """
         # `BucketIterator` makes use of global `random` state
         if seed:
             random.seed(seed)
@@ -127,6 +176,19 @@ class Pipeline(object):
         self.train_iter, self.valid_iter, self.test_iter = iterators
 
     def build_model(self, rnn_units: int, attn_units: int, dropout: float) -> Tuple[int, int]:
+        """Build an encoder-decoder model for simplification.
+
+        Must be called after calling `load_vectors`.
+
+        :param rnn_units: int
+            RNN state dimensionality.
+        :param attn_units: int
+            Attention state dimensionality.
+        :param dropout: float
+            Dropout probability.
+        :return: Tuple[int, int]
+            Number of trainable parameters and total number of model parameters, respectively.
+        """
         self.rnn_units = rnn_units
         self.attn_units = attn_units
         self.dropout = dropout
@@ -142,10 +204,21 @@ class Pipeline(object):
         return utils.count_parameters(self.model)
 
     def train(self, num_epochs: int) -> int:
+        """Train model.
+
+        Trains the model for at most `num_epochs` epochs, stopping early if the validation loss increases for two
+        consecutive epochs. Whenever the validation loss achieves a minimum, the model is checkpointed. The best model
+        is re-loaded at the end of the training cycle.
+
+        Must be called after calling `prepare_data` and `build_model`.
+
+        :param num_epochs: int
+            Maximum number of epochs.
+        :return: int
+            Number of epochs spent training.
+        """
         best_valid_loss = float('inf')
-        train_hist = [best_valid_loss, best_valid_loss]
         valid_hist = [best_valid_loss, best_valid_loss]
-        times_hist = [0, 0]
         for epoch in range(num_epochs):
             # perform step
             start_time = time.time()
@@ -183,6 +256,17 @@ class Pipeline(object):
                 return epoch + 1
 
     def evaluate(self, beam_size: int = 10, max_len: int = 30, alpha: float = 1) -> Tuple[float, float, float, float]:
+        """Evaluate the model.
+
+        :param beam_size: int
+            Beam size used in beam search.
+        :param max_len: int
+            Maximum beam search output length.
+        :param alpha: float
+            Beam search regularization parameter.
+        :return: Tuple[float, float, float, float]
+            Training loss, validation loss, test loss, and BLEU score, respectively.
+        """
         # Compute losses
         train_loss = utils.evaluate(self.model, self.train_iter, self.criterion)
         valid_loss = utils.evaluate(self.model, self.valid_iter, self.criterion)
@@ -204,15 +288,18 @@ class Pipeline(object):
         return train_loss, valid_loss, test_loss, bleu
 
     def beam_search(self, source: List[str], beam_size: int, max_len: int, alpha: float = 1) -> List[str]:
-        """
-        :param source:
-            List of tokens
+        """Perform beam search on a tokenized source sequence.
+
+        :param source: List[str]
+            List of tokens.
         :param beam_size: int
+            Beam size.
         :param max_len: int
+            Maximum output length.
         :param alpha: float
             Length regularization parameter
-        :return:
-            List of tokens
+        :return: List[str]
+            List of output tokens.
         """
         with torch.no_grad():
             sos_index = self.trg.vocab.stoi[self.SOS_TOKEN]
