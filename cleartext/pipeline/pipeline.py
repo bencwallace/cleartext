@@ -80,7 +80,7 @@ class Pipeline(object):
         :param name: str
             Pipeline name.
         """
-        (self.MODELS_ROOT / name).mkdir(exist_ok=True)
+        (self.MODELS_ROOT / name).mkdir(exist_ok=True, parents=True)
         self.root = self.MODELS_ROOT / name
         self.device = utils.get_device()
         self.model_index = 0
