@@ -168,7 +168,7 @@ class Decoder(nn.Module):
         super().__init__()
         self.vocab_size, embed_dim = embed_weights.shape
 
-        self.embedding = nn.Embedding.from_pretrained(embed_weights)                    #
+        self.embedding = nn.Embedding.from_pretrained(embed_weights)
         self.rnn = nn.GRU((units * 2) + embed_dim, units)
         self.fc = nn.Linear(units + 2 * enc_units + embed_dim, self.vocab_size)
         self.dropout = nn.Dropout(dropout)

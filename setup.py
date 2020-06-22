@@ -9,5 +9,15 @@ setup(
     license='',
     author='Benjamin Wallace',
     author_email='me@bcwallace.com',
-    description=''
+    description='',
+    install_requires=[
+        'torch',
+        'torchtext',
+        'spacy',
+        'click',
+        'pytest',
+        'flask',
+        'mlflow',
+        'en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-2.2.0/en_core_web_sm-2.2.0.tar.gz'
+    ]
 )
