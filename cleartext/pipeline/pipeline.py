@@ -48,7 +48,9 @@ class Pipeline(object):
 
         path = Path(path)
         pl_dict = torch.load(path / f'model{index:02}.pt', map_location=device)
-        name = pl_dict['name']
+        name = pl_dict.get('name')
+        if name is None:
+            name = path.name
         pipeline = cls(name)
 
         # load preprocessing
@@ -84,6 +86,7 @@ class Pipeline(object):
         self.root = self.MODELS_ROOT / name
         self.device = utils.get_device()
         self.model_index = 0
+        self.name = name
 
         self.src = None
         self.trg = None
@@ -244,6 +247,7 @@ class Pipeline(object):
             if valid_loss < best_valid_loss:
                 best_valid_loss = valid_loss
                 torch.save({
+                    'name': self.name,
                     'device': self.device,
                     'rnn_units': self.rnn_units,
                     'attn_units': self.attn_units,
