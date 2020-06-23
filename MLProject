@@ -31,3 +31,5 @@ entry_points:
         --dropout {dropout} \
         --alpha {alpha} \
         --seed {seed}
+  help:
+    command: python -m cleartext.scripts.train --help

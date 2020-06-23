@@ -39,47 +39,56 @@ difficulty they encounter and the crudeness of existing forms of assistance, suc
 
 ClearText solves this problem through the use of text simplification technology.
 
-## Details and Development
+## Developing Simplification Models with ClearText
 
-ClearText uses sequence-to-sequence model trained on the WikiSmall/WikiLarge datasets. For more on these datasets, take a look at
-the [notebook][]. A high-level overview of the development of ClearText can be found in [these slides][]
+ClearText uses a sequence-to-sequence model trained on the WikiSmall/WikiLarge datasets. For more on these datasets,
+take a look at the [notebook][]. A high-level overview of the development of ClearText can be found in [these slides][].
 
-### Package Installation
+There are two ways of training simplification models with ClearText.
+In both cases, time spent and training/validation losses will be printed at the end of each epoch.
+When training completes or if you interrupt training, tests are run and diagnostics are printed.
 
-The ClearText package can be installed using `pip`. Any required data (including word vectors) will be downloaded on-the-fly at runtime.
+### Installing and Running ClearText as a Package
+
+The ClearText package can be installed using `pip`. Any required data (including word vectors) will be downloaded
+*on-the-fly* at runtime.
 
 ```bash
 pip install git+https://github.com/bencwallace/cleartext
 ```
 
-### Training
-
-The `train.py` script in the [scripts][] directory can be used to train a simplification model.
-Usage instructions can be printed as follows.
+After installing ClearText, instructions for training a simplification model can be printed with the following command.
 
 ```bash
 python -m cleartext.scripts.train --help 
 ```
 
-Time spent and training/validation losses will be printed at the end of each epoch. When training
-completes or if you interrupt training, tests are run and diagnostics are printed.  
+### Running ClearText with MLflow
 
-It is recommended to execute a ClearText training run from within an [MLflow](https://mlflow.org/) environment;
-MLflow will automatically track and log runtime parameters and training progress.
-To execute a training run with MLflow, ensure you are in the current directory and use the following command (make sure **not to forget** the dot at the end):
+Running ClearText with [MLflow][] not only takes care of preparing and
+isolating your environment, but has the additional advantage of automatically logging training progress and metadata
+using [MLflow tracking][].
+
+To train with MLflow, first install MLflow, either using pip (`pip install mlflow`) or conda
+(`conda install -c conda-forge mlflow`) and then run the following command
+```bash
+mlflow run [options] https://github.com/bencwallace/cleartext
+```
+where `[options]` is a sequence of options taking the form `-P parameter=[value]`.
+For instance, to train for 10 epochs with 100 hidden units, use the following command:
 
 ```bash
-mlflow run [parameters] .
+mlflow run -P num-epochs=10 -P rnn-units=100 https://github.com/bencwallace/cleartext
 ```
 
-where [parameters] is formatted according to the MLflow CLI [instructions](https://mlflow.org/docs/latest/cli.html#mlflow-run).
-For instance, to run for 10 epochs with 100 hidden units, use the following command:
-
+For a list of available options, run
 ```bash
-mlflow run -P num-epochs=10 -P rnn-units=100 .
+mlflow run -e help https://github.com/bencwallace/cleartext
 ```
 
 [Forbes]: https://www.forbes.com/sites/susanadams/2019/07/16/game-of-tongues-how-duolingo-built-a-700-million-business-with-its-addictive-language-learning-app/
+[MLflow]: https://mlflow.org/
+[MLflow tracking]: https://mlflow.org/docs/latest/tracking.html
 [TESOL]: https://www.tesol.org/
 
 [notebook]: notebooks/cleartext.ipynb
