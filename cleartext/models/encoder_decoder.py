@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -78,7 +78,8 @@ class EncoderDecoder(nn.Module):
 
         return outputs
 
-    def beam_search(self, source: Tensor, beam_size: int, trg_sos: int, max_len: int, trg_unk: int) -> Tuple[Tensor, Tensor]:
+    def beam_search(self, source: Tensor, beam_size: int, trg_sos: int, trg_unk: int,
+                    max_len: Optional[int] = None) -> Tuple[Tensor, Tensor]:
         """Translate a source sequence into an output sequence using beam search.
 
         :param source: Tensor
@@ -87,8 +88,8 @@ class EncoderDecoder(nn.Module):
             The beam size.
         :param trg_sos: int
             Target start-of-sentence index, used to initialize output.
-        :param max_len: int
-            Maximum output length.
+        :param max_len: int, optional
+            Maximum output length. Defaults to None, meaning the maximum length is computed from the input length.
         :return: Tuple[Tensor, Tensor]
             Un-trimmed output sequences of shape (max_len, beam_size) and *unnormalized* scores of shape (beam_size,).
         """

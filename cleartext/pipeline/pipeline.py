@@ -202,6 +202,7 @@ class Pipeline(object):
                                     rnn_units, attn_units, dropout).to(self.device)
 
         self.optimizer = optim.Adam(self.model.parameters())
+        # self.optimizer = optim.SGD(self.model.parameters(), lr=0.1, momentum=0.9)
         self.criterion = nn.CrossEntropyLoss(ignore_index=self.trg.vocab.stoi[self.PAD_TOKEN])
 
         return utils.count_parameters(self.model)
@@ -291,7 +292,8 @@ class Pipeline(object):
 
         return train_loss, valid_loss, test_loss, bleu
 
-    def beam_search(self, source: List[str], beam_size: int, max_len: int, alpha: float = 1) -> List[str]:
+    def beam_search(self, source: List[str], beam_size: int,
+                    max_len: Optional[int] = None, alpha: float = 1) -> List[str]:
         """Perform beam search on a tokenized source sequence.
 
         :param source: List[str]
@@ -309,11 +311,13 @@ class Pipeline(object):
             sos_index = self.trg.vocab.stoi[self.SOS_TOKEN]
             eos_index = self.trg.vocab.stoi[self.EOS_TOKEN]
             unk_index = self.trg.vocab.stoi[self.UNK_TOKEN]
+            if max_len is None:
+                max_len = 2 * len(source)
 
             # run beam search
             source_tensor = self.src.process([source]).to(self.device)
             source_tensor = source_tensor.squeeze(1)
-            beam_search_results = self.model.beam_search(source_tensor, beam_size, sos_index, max_len, unk_index)
+            beam_search_results = self.model.beam_search(source_tensor, beam_size, sos_index, unk_index, max_len)
             output_tensor, scores = beam_search_results                     # (max_len, beam_size), (beam_size,)
 
             # find ends of sequences

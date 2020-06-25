@@ -12,6 +12,7 @@ MAX_LEN = 50
 
 MODELS_ROOT = PROJ_ROOT / 'models'
 MODEL_DIR = MODELS_ROOT / 'jun-17-fixed'
+# MODEL_DIR = MODELS_ROOT / 'jun-23'
 
 nlp = English()
 nlp.add_pipe(nlp.create_pipe('sentencizer'))
@@ -31,7 +32,7 @@ def main():
         capitalized = sentence[0].isupper()
         tokens = pl.src.preprocess(sentence)
 
-        output = pl.beam_search(tokens, BEAM_SIZE, MAX_LEN)
+        output = pl.beam_search(tokens, BEAM_SIZE)
         has_period = output[-1] == '.'
         if has_period:
             result = ' '.join(output[:-1]).strip()
