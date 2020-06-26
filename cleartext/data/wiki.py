@@ -77,6 +77,7 @@ class WikiSL(TranslationDataset):
 
 class WikiSmall(WikiSL):
     """The WikiSmall dataset."""
+
     name = ''
     dir_name = 'wikismall'
     dirname = ''
@@ -85,6 +86,7 @@ class WikiSmall(WikiSL):
 
 class WikiLarge(WikiSL):
     """The WikiLarge dataset."""
+
     name = ''
     dir_name = 'wikilarge'
     dirname = ''

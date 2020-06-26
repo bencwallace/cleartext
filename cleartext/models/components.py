@@ -29,6 +29,7 @@ class Encoder(nn.Module):
     dropout: Module
         Dropout module for the fully-connected layer.
     """
+
     def __init__(self, embed_weights: Tensor, units: int, dropout: float) -> None:
         """Initialize the encoder.
 

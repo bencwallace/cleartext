@@ -7,19 +7,19 @@ fluency.
 
 ## Quick Start
 
-For installation and usage instructions, refer to the [official ClearText extension page](https://bcwallace.com/cleartext).
+For installation and usage instructions, refer to the [official ClearText extension page][extension].
 
 ## What problem does ClearText address?
 
 ### The *English as a Second Language* Market
 
-According to [TESOL][] (Teachers of English to Speakers of Other Languages), there are over
-[1.5 billion][1]
+According to [TESOL][tesol] (Teachers of English to Speakers of Other Languages), there are over
+[1.5 billion][tesol-stats]
 English language learners worldwide. A huge amount of human labour is involved in educating these learners. However,
 many learners may not be able to afford lesson costs and must resort to other methods.
 
-There is a large market for assisted language learning applications. For instance, [Forbes][]
-reports [Babbel's](https://www.babbel.com/) revenue at \$115 million and [Duolingo's][2] 2017 valuation at \$700
+There is a large market for assisted language learning applications. For instance, [Forbes][forbes]
+reports [Babbel's][babbel] revenue at \$115 million and [Duolingo's][duolingo] 2017 valuation at \$700
 million.
 
 However, apps like these are generally limited to basic language skills that do not transfer to real world use. In order
@@ -42,7 +42,8 @@ ClearText solves this problem through the use of text simplification technology.
 ## Developing Simplification Models with ClearText
 
 ClearText uses a sequence-to-sequence model trained on the WikiSmall/WikiLarge datasets. For more on these datasets,
-take a look at the [notebook][]. A high-level overview of the development of ClearText can be found in [these slides][].
+take a look at the [notebook][]. A high-level overview of the development of ClearText can be found in
+[these slides][slides].
 
 There are two ways of training simplification models with ClearText.
 In both cases, time spent and training/validation losses will be printed at the end of each epoch.
@@ -65,9 +66,9 @@ python -m cleartext.scripts.train --help
 
 ### Running ClearText with MLflow
 
-Running ClearText with [MLflow][] not only takes care of preparing and
+Running ClearText with [MLflow][mlflow] not only takes care of preparing and
 isolating your environment, but has the additional advantage of automatically logging training progress and metadata
-using [MLflow tracking][].
+using [MLflow tracking][tracking].
 
 To train with MLflow, first install MLflow, either using pip (`pip install mlflow`) or conda
 (`conda install -c conda-forge mlflow`) and then run the following command
@@ -86,14 +87,14 @@ For a list of available options, run
 mlflow run -e help https://github.com/bencwallace/cleartext
 ```
 
-[Forbes]: https://www.forbes.com/sites/susanadams/2019/07/16/game-of-tongues-how-duolingo-built-a-700-million-business-with-its-addictive-language-learning-app/
-[MLflow]: https://mlflow.org/
-[MLflow tracking]: https://mlflow.org/docs/latest/tracking.html
-[TESOL]: https://www.tesol.org/
-
+[babbel]: https://www.babbel.com/
+[duolingo]: https://www.duolingo.com/
+[extension]: https://bcwallace.com/cleartext
+[forbes]: https://www.forbes.com/sites/susanadams/2019/07/16/game-of-tongues-how-duolingo-built-a-700-million-business-with-its-addictive-language-learning-app/
+[mlflow]: https://mlflow.org/
 [notebook]: notebooks/cleartext.ipynb
 [scripts]: https://github.com/bencwallace/cleartext/tree/master/scripts
-[these slides]: https://docs.google.com/presentation/d/1X-X74s5Db-YFYO9kv7kX1GYn6aSDT_UkXKY-Jlb7cjo/edit?usp=sharing
-
-[1]: https://www.internationalteflacademy.com/blog/report-from-tesol-2-billion-english-learners-worldwide
-[2]: https://www.duolingo.com/
+[slides]: https://docs.google.com/presentation/d/1X-X74s5Db-YFYO9kv7kX1GYn6aSDT_UkXKY-Jlb7cjo/edit?usp=sharing
+[tracking]: https://mlflow.org/docs/latest/tracking.html
+[tesol]: https://www.tesol.org/
+[tesol-stats]: https://www.internationalteflacademy.com/blog/report-from-tesol-2-billion-english-learners-worldwide

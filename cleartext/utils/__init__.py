@@ -7,5 +7,7 @@ __all__ = ['init_weights_',
            'seq_to_sentence',
            'preprocess',
            'print_loss',
-           'get_device'
+           'get_device',
+           'train',
+           'evaluate'
            ]

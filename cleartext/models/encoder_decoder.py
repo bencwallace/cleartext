@@ -28,7 +28,8 @@ class EncoderDecoder(nn.Module):
                  embed_weights_src: Tensor, embed_weights_trg: Tensor,
                  rnn_units: int, attn_units: int,
                  dropout: float) -> None:
-        """
+        """Initialize model.
+
         :param device: torch.device
             Device on which to load the model.
         :param embed_weights_src: Tensor
@@ -113,7 +114,7 @@ class EncoderDecoder(nn.Module):
         states = state.unsqueeze(0).repeat(beam_size, 1, 1)                     # (beam_size, 1, dec_units)
 
         # main loop over time steps
-        for t in range(1, max_len):
+        for _ in range(1, max_len):
             # generate scores for next time step
             all_scores = torch.empty(0, device=self.device)
             for i, seq in enumerate(sequences.permute(1, 0)):                   # (seq_len,)
