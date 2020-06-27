@@ -21,9 +21,9 @@ class Encoder(nn.Module):
         Embedding dimensionality.
     embedding: Module
         Embedding module.
-    gru: Module
+    lstm: Module
         Bidirectional GRU module.
-    fc: Module
+    fc_hidden: Module
         Fully-connected layer. Used to perform dimensionality reduction on final (bidirectional) hidden state, which
         will be used to initialize the (unidirectional) hidden state of the decoder.
     dropout: Module
@@ -47,30 +47,36 @@ class Encoder(nn.Module):
         self.embed_dim = embed_weights.shape[1]
 
         self.embedding = nn.Embedding.from_pretrained(embed_weights)
-        self.gru = nn.GRU(self.embed_dim, units, bidirectional=True)
-        self.fc = nn.Linear(units * 2, units)
+        self.lstm = nn.LSTM(self.embed_dim, units, bidirectional=True)
+        self.fc_hidden = nn.Linear(units * 2, units)
+        self.fc_cell = nn.Linear(units * 2, units)
         self.dropout = nn.Dropout(dropout)
 
-        utils.init_weights_(self.gru)
-        utils.init_weights_(self.fc)
+        utils.init_weights_(self.lstm)
+        utils.init_weights_(self.fc_hidden)
 
-    def forward(self, source: Tensor) -> Tuple[Tensor, Tensor]:
+    def forward(self, source: Tensor) -> Tuple[Tensor, Tuple[Tensor, Tensor]]:
         """Encoder a source sequence by forward propagation.
 
         :param source: Tensor
             Source sequence of shape (seq_len, batch_size)
-        :return: Tuple[Tensor, Tensor]
-            Outputs of shape (seq_len, batch_size, units) and state of shape (batch_size, units)
+        :return: Tuple[Tensor, Tensor, Tensor]
+            Outputs of shape (seq_len, batch_size, units) and hidden/cell states of shape (batch_size, units)
         """
         embedded = self.embedding(source)
-        outputs, state = self.gru(embedded)
+        outputs, state = self.lstm(embedded, None)
+        hidden, cell = state
 
         # combine and reshape bidirectional states for compatibility with (unidirectional) decoder
-        combined = torch.cat((state[-2, :, :], state[-1, :, :]), dim=1)
-        combined = self.dropout(combined)
-        state = torch.tanh(self.fc(combined))
+        hidden_combined = torch.cat((hidden[-2, :, :], hidden[-1, :, :]), dim=1)
+        hidden_combined = self.dropout(hidden_combined)
+        hidden = torch.tanh(self.fc_hidden(hidden_combined))
 
-        return outputs, state
+        cell_combined = torch.cat((cell[-2, :, :], cell[-1, :, :]), dim=1)
+        cell_combined = self.dropout(cell_combined)
+        cell = torch.tanh(self.fc_cell(cell_combined))
+
+        return outputs, (hidden, cell)
 
 
 class Attention(nn.Module):
@@ -149,7 +155,7 @@ class Decoder(nn.Module):
         Embedding dimension.
     embedding: Module
         Embedding layer.
-    rnn: Module
+    lstm: Module
         GRU.
     fc: Module
         Fully-connected layer that outputs scores over target vocabulary.
@@ -170,19 +176,20 @@ class Decoder(nn.Module):
         self.vocab_size, embed_dim = embed_weights.shape
 
         self.embedding = nn.Embedding.from_pretrained(embed_weights)
-        self.rnn = nn.GRU((units * 2) + embed_dim, units)
+        self.lstm = nn.LSTM((units * 2) + embed_dim, units)
         self.fc = nn.Linear(units + 2 * enc_units + embed_dim, self.vocab_size)
         self.dropout = nn.Dropout(dropout)
 
-        utils.init_weights_(self.rnn)
+        utils.init_weights_(self.lstm)
         utils.init_weights_(self.fc)
 
-    def forward(self, token: Tensor, dec_state: Tensor, context: Tensor) -> Tuple[Tensor, Tensor]:
+    def forward(self, token: Tensor, dec_hidden: Tensor, context: Tensor, dec_cell: Tensor)\
+            -> Tuple[Tensor, Tuple[Tensor, Tensor]]:
         """Decodes the next token.
 
         :param token: Tensor
             Token of shape (batch_size,).
-        :param dec_state:
+        :param dec_hidden:
             Decoder state of shape (batch_size, dec_units).
         :param context:
             Context vector of shape (1, batch_size, 2 * enc_units).
@@ -193,7 +200,7 @@ class Decoder(nn.Module):
         embedded = self.embedding(token)
 
         rnn_input = torch.cat((embedded, context), dim=2)
-        output, dec_state = self.rnn(rnn_input, dec_state.unsqueeze(0))
+        output, (dec_hidden, dec_cell) = self.lstm(rnn_input, (dec_hidden.unsqueeze(0), dec_cell.unsqueeze(0)))
 
         embedded = embedded.squeeze(0)
         output = output.squeeze(0)
@@ -205,5 +212,6 @@ class Decoder(nn.Module):
         output = self.fc(combined)
 
         # return logits (rather than softmax activations) for compatibility with cross-entropy loss
-        dec_state = dec_state.squeeze(0)
-        return output, dec_state
+        dec_hidden = dec_hidden.squeeze(0)
+        dec_cell = dec_cell.squeeze(0)
+        return output, (dec_hidden, dec_cell)
