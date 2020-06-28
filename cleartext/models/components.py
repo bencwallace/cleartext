@@ -23,16 +23,9 @@ class Encoder(nn.Module):
         Embedding module.
     lstm: Module
         Bidirectional LSTM module.
-    fc_hidden: Module
-        Fully-connected layer. Used to perform dimensionality reduction on final (bidirectional) hidden state, which
-        will be used to initialize the (unidirectional) hidden state of the decoder.
-    fc_cell: Module
-        Fully-connected layer. Purpose similar to that of fc_hidden, but for the cell state.
-    dropout: Module
-        Dropout module for the fully-connected layer.
     """
 
-    def __init__(self, embed_weights: Tensor, units: int, dropout: float) -> None:
+    def __init__(self, embed_weights: Tensor, units: int) -> None:
         """Initialize the encoder.
 
         Constructs encoder sub-modules and initializes their weights using `utils.init_weights`.
@@ -41,8 +34,6 @@ class Encoder(nn.Module):
             Embedding weights of shape (src_vocab_size, embed_dim).
         :param units: int
             Number of LSTM hidden units.
-        :param dropout: float
-            Dropout probability.
         """
         super().__init__()
         self.units = units
@@ -50,12 +41,8 @@ class Encoder(nn.Module):
 
         self.embedding = nn.Embedding.from_pretrained(embed_weights)
         self.lstm = nn.LSTM(self.embed_dim, units, bidirectional=True)
-        self.fc_hidden = nn.Linear(units * 2, units)
-        self.fc_cell = nn.Linear(units * 2, units)
-        self.dropout = nn.Dropout(dropout)
 
         utils.init_weights_(self.lstm)
-        utils.init_weights_(self.fc_hidden)
 
     def forward(self, source: Tensor) -> Tuple[Tensor, Tuple[Tensor, Tensor]]:
         """Encoder a source sequence by forward propagation.
@@ -64,20 +51,11 @@ class Encoder(nn.Module):
             Source sequence of shape (seq_len, batch_size).
         :return: Tuple[Tensor, Tensor, Tensor]
             Outputs of shape (seq_len, batch_size, units) and tuple containing hidden/cell states, respectively, both
-            of shape (batch_size, units).
+            of shape (batch_size, 2 * units).
         """
         embedded = self.embedding(source)
         outputs, state = self.lstm(embedded, None)
         hidden, cell = state
-
-        # combine and reshape bidirectional states for compatibility with (unidirectional) decoder
-        hidden_combined = torch.cat((hidden[-2, :, :], hidden[-1, :, :]), dim=1)
-        hidden_combined = self.dropout(hidden_combined)
-        hidden = torch.tanh(self.fc_hidden(hidden_combined))
-
-        cell_combined = torch.cat((cell[-2, :, :], cell[-1, :, :]), dim=1)
-        cell_combined = self.dropout(cell_combined)
-        cell = torch.tanh(self.fc_cell(cell_combined))
 
         return outputs, (hidden, cell)
 

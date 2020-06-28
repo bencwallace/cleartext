@@ -6,6 +6,7 @@ from torch.nn.functional import softmax
 from torch import Tensor
 
 from .components import Encoder, Attention, Decoder
+from .. import utils
 
 
 class EncoderDecoder(nn.Module):
@@ -23,6 +24,11 @@ class EncoderDecoder(nn.Module):
         Decoder sub-module.
     attention: Module
         Attention sub-module.
+    fc_hidden: Module
+        Fully-connected layer. Used to perform dimensionality reduction on final (bidirectional) encoder hidden state,
+        which will be used to initialize the (unidirectional) hidden state of the decoder.
+    fc_cell: Module
+        Fully-connected layer. Purpose similar to that of fc_hidden, but for the cell state.
     """
     def __init__(self, device: torch.device,
                  embed_weights_src: Tensor, embed_weights_trg: Tensor,
@@ -45,9 +51,15 @@ class EncoderDecoder(nn.Module):
         self.device = device
         self.trg_vocab_size = embed_weights_trg.shape[0]
 
-        self.encoder = Encoder(embed_weights_src, rnn_units, dropout)
+        self.encoder = Encoder(embed_weights_src, rnn_units)
         self.decoder = Decoder(embed_weights_trg, rnn_units, rnn_units, dropout)
         self.attention = Attention(rnn_units, rnn_units, attn_units)
+
+        self.fc_hidden = nn.Linear(2 * rnn_units, rnn_units)
+        self.fc_cell = nn.Linear(2 * rnn_units, rnn_units)
+
+        utils.init_weights_(self.fc_hidden)
+        utils.init_weights_(self.fc_cell)
 
     def forward(self, source: Tensor, target: Tensor, teacher_forcing: float = 0.3) -> Tensor:
         """Translates a source sequence into an output sequence using teacher forcing.
@@ -67,7 +79,7 @@ class EncoderDecoder(nn.Module):
         batch_size = source.shape[1]
         max_len = target.shape[0]
         enc_outputs, state = self.encoder(source)
-        hidden, cell = state
+        hidden, cell = self._reduce(state)
 
         outputs = torch.zeros(max_len, batch_size, self.trg_vocab_size, device=self.device)
         out = target[0, :]
@@ -98,7 +110,8 @@ class EncoderDecoder(nn.Module):
         self.eval()
 
         # run encoder
-        enc_outputs, (hidden, cell) = self.encoder(source.unsqueeze(1))
+        enc_outputs, state = self.encoder(source.unsqueeze(1))
+        hidden, cell = self._reduce(state)
 
         # initialize distribution over first word
         context = self._compute_context(hidden, enc_outputs)
@@ -172,3 +185,15 @@ class EncoderDecoder(nn.Module):
         enc_outputs = enc_outputs.permute(1, 0, 2)
         context = torch.bmm(weights, enc_outputs).permute(1, 0, 2)
         return context
+
+    def _reduce(self, state: Tuple[Tensor, Tensor]) -> Tuple[Tensor, Tensor]:
+        hidden, cell = state
+
+        # combine and reshape bidirectional states for compatibility with (unidirectional) decoder
+        hidden_combined = torch.cat((hidden[-2, :, :], hidden[-1, :, :]), dim=1)
+        hidden = torch.tanh(self.fc_hidden(hidden_combined))
+
+        cell_combined = torch.cat((cell[-2, :, :], cell[-1, :, :]), dim=1)
+        cell = torch.tanh(self.fc_cell(cell_combined))
+
+        return hidden, cell
