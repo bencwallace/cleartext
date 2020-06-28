@@ -46,7 +46,7 @@ class EncoderDecoder(nn.Module):
         self.trg_vocab_size = embed_weights_trg.shape[0]
 
         self.encoder = Encoder(embed_weights_src, rnn_units, dropout)
-        self.decoder = Decoder(embed_weights_trg, rnn_units, dropout, rnn_units)
+        self.decoder = Decoder(embed_weights_trg, rnn_units, rnn_units, dropout)
         self.attention = Attention(rnn_units, rnn_units, attn_units)
 
     def forward(self, source: Tensor, target: Tensor, teacher_forcing: float = 0.3) -> Tensor:
@@ -73,7 +73,7 @@ class EncoderDecoder(nn.Module):
         out = target[0, :]
         for t in range(1, max_len):
             context = self._compute_context(hidden, enc_outputs)
-            out, (hidden, cell) = self.decoder(out, hidden, context, cell)
+            out, (hidden, cell) = self.decoder(out, context, hidden, cell)
             outputs[t] = out
             teacher_force = torch.bernoulli(torch.tensor(teacher_forcing, dtype=torch.float)).item()
             out = (target[t] if teacher_force else out.max(1)[1])
@@ -103,7 +103,7 @@ class EncoderDecoder(nn.Module):
         # initialize distribution over first word
         context = self._compute_context(hidden, enc_outputs)
         token = torch.tensor([trg_sos], dtype=torch.long, device=self.device)
-        out, (hidden, cell) = self.decoder(token, hidden, context, cell)                        # (1, vocab_size), (1, dec_units)
+        out, (hidden, cell) = self.decoder(token, context, hidden, cell)        # (1, vocab_size), (1, dec_units)
 
         # compute log-likelihood scores
         probs = softmax(out, dim=1)
@@ -112,7 +112,7 @@ class EncoderDecoder(nn.Module):
         # initialize scores, sequences, and states
         scores, sequences = torch.topk(scores, beam_size, dim=1)                # (1, beam_size), (seq_len=1, beam_size)
         scores = scores.squeeze(0)                                              # (beam_size,)
-        hidden_states = hidden.unsqueeze(0).repeat(beam_size, 1, 1)                     # (beam_size, 1, dec_units)
+        hidden_states = hidden.unsqueeze(0).repeat(beam_size, 1, 1)             # (beam_size, 1, dec_units)
         cell_states = cell.unsqueeze(0).repeat(beam_size, 1, 1)
 
         # main loop over time steps
@@ -123,9 +123,13 @@ class EncoderDecoder(nn.Module):
                 # run decoder
                 context = self._compute_context(hidden_states[i], enc_outputs)
                 token = seq[-1].unsqueeze(0)                                    # (1,)
-                out, (hidden_states[i], cell_states[i]) = self.decoder(token, hidden_states[i], context, cell_states[i])        # (1, vocab_size), (1, dec_units)
+
+                # (1, vocab_size), (1, dec_units)
+                out, (hidden_states[i], cell_states[i]) = self.decoder(token, context, hidden_states[i], cell_states[i])
+
                 # apply softmax
                 probs = softmax(out, dim=1)                                     # (1, vocab_size)
+
                 # mask out <unk>
                 # probs[0, trg_unk] = 0
 
@@ -147,8 +151,8 @@ class EncoderDecoder(nn.Module):
                 vocab_index = idx % self.trg_vocab_size
 
                 # add new sequence
-                new_seq = torch.cat((sequences[:, seq_index], vocab_index.unsqueeze(0)))     # (t + 1,)
-                new_sequences = torch.cat((new_sequences, new_seq.unsqueeze(1)), dim=1)      # (t + 1, num_iterations)
+                new_seq = torch.cat((sequences[:, seq_index], vocab_index.unsqueeze(0)))     # (_ + 1,)
+                new_sequences = torch.cat((new_sequences, new_seq.unsqueeze(1)), dim=1)      # (_ + 1, num_iterations)
             # update sequences tensor
             sequences = new_sequences
 
