@@ -178,7 +178,7 @@ class Pipeline(object):
                                           batch_size=batch_size, device=self.device)
         self.train_iter, self.valid_iter, self.test_iter = iterators
 
-    def build_model(self, rnn_units: int, attn_units: int, dropout: float) -> Tuple[int, int]:
+    def build_model(self, rnn_units: int, attn_units: int, num_layers: int, dropout: float) -> Tuple[int, int]:
         """Build an encoder-decoder model for simplification.
 
         Must be called after calling `load_vectors`.
@@ -187,6 +187,8 @@ class Pipeline(object):
             RNN state dimensionality.
         :param attn_units: int
             Attention state dimensionality.
+        :param num_layers: int
+            Number of encoder layers.
         :param dropout: float
             Dropout probability.
         :return: Tuple[int, int]
@@ -199,7 +201,7 @@ class Pipeline(object):
         self.model_index += 1
         self.model_path = self.root / f'model{self.model_index:02}.pt'
         self.model = EncoderDecoder(self.device, self.src.vocab.vectors, self.trg.vocab.vectors,
-                                    rnn_units, attn_units, dropout).to(self.device)
+                                    rnn_units, attn_units, num_layers, dropout).to(self.device)
 
         self.optimizer = optim.Adam(self.model.parameters())
         # self.optimizer = optim.SGD(self.model.parameters(), lr=0.1, momentum=0.9)

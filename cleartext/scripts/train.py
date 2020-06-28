@@ -35,6 +35,7 @@ MODELS_ROOT = PROJ_ROOT / 'models'
 @click.option('--trg_vocab', '-t', required=False, type=int, help='Max target vocabulary size')
 @click.option('--rnn_units', '-r', default=100, type=int, help='Number of RNN units')
 @click.option('--attn_units', '-a', default=100, type=int, help='Number of attention units')
+@click.option('--num_layers', '-l', default=1, type=int, help='Number of encoder layers')
 @click.option('--dropout', '-p', default=0.3, type=float, help='Dropout probability')
 @click.option('--alpha', default=0.5, type=float, help='Beam search regularization')
 @click.option('--seed', required=False, type=str, help='Random seed')
@@ -42,6 +43,7 @@ def main(dataset: str,
          num_epochs: int, max_examples: Optional[int], batch_size: int,
          embed_dim: str, src_vocab: Optional[int], trg_vocab: Optional[int],
          rnn_units: int, attn_units: int,
+         num_layers: int,
          dropout: float, alpha: float, seed: Optional[str] = None) -> None:
     # parse/validate arguments
     if dataset.lower() == 'wikismall':
@@ -79,7 +81,7 @@ def main(dataset: str,
     print('Building model')
     if seed is not None:
         torch.manual_seed(seed)
-    trainable, total = pipeline.build_model(rnn_units, attn_units, dropout)
+    trainable, total = pipeline.build_model(rnn_units, attn_units, num_layers, dropout)
     print(f'Trainable parameters: {trainable} | Total parameters: {total}')
     print()
 

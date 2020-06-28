@@ -25,7 +25,7 @@ class Encoder(nn.Module):
         Bidirectional LSTM module.
     """
 
-    def __init__(self, embed_weights: Tensor, units: int) -> None:
+    def __init__(self, embed_weights: Tensor, units: int, enc_layers: int) -> None:
         """Initialize the encoder.
 
         Constructs encoder sub-modules and initializes their weights using `utils.init_weights`.
@@ -34,13 +34,15 @@ class Encoder(nn.Module):
             Embedding weights of shape (src_vocab_size, embed_dim).
         :param units: int
             Number of LSTM hidden units.
+        :param enc_layers: int
+            Number of layers.
         """
         super().__init__()
         self.units = units
         self.embed_dim = embed_weights.shape[1]
 
         self.embedding = nn.Embedding.from_pretrained(embed_weights)
-        self.lstm = nn.LSTM(self.embed_dim, units, bidirectional=True)
+        self.lstm = nn.LSTM(self.embed_dim, units, num_layers=enc_layers, bidirectional=True)
 
         utils.init_weights_(self.lstm)
 
@@ -50,8 +52,8 @@ class Encoder(nn.Module):
         :param source: Tensor
             Source sequence of shape (seq_len, batch_size).
         :return: Tuple[Tensor, Tensor, Tensor]
-            Outputs of shape (seq_len, batch_size, units) and tuple containing hidden/cell states, respectively, both
-            of shape (batch_size, 2 * units).
+            Outputs of shape (seq_len, batch_size, 2 * units) and tuple containing hidden/cell states, respectively,
+            both of shape (2 * enc_layers, batch_size, units).
         """
         embedded = self.embedding(source)
         outputs, state = self.lstm(embedded, None)

@@ -33,6 +33,7 @@ class EncoderDecoder(nn.Module):
     def __init__(self, device: torch.device,
                  embed_weights_src: Tensor, embed_weights_trg: Tensor,
                  rnn_units: int, attn_units: int,
+                 enc_layers: int,
                  dropout: float) -> None:
         """Initialize model.
 
@@ -44,14 +45,18 @@ class EncoderDecoder(nn.Module):
             Number of hidden units in all sub-module RNNs.
         :param attn_units: int
             Number of hidden units in attention layer.
+        :param enc_layers: int
+            Number of encoder layers.
         :param dropout: float
             Dropout probability.
         """
         super().__init__()
         self.device = device
         self.trg_vocab_size = embed_weights_trg.shape[0]
+        self.enc_layers = enc_layers
+        self.rnn_units = rnn_units
 
-        self.encoder = Encoder(embed_weights_src, rnn_units)
+        self.encoder = Encoder(embed_weights_src, rnn_units, enc_layers)
         self.decoder = Decoder(embed_weights_trg, rnn_units, rnn_units, dropout)
         self.attention = Attention(rnn_units, rnn_units, attn_units)
 
@@ -187,13 +192,25 @@ class EncoderDecoder(nn.Module):
         return context
 
     def _reduce(self, state: Tuple[Tensor, Tensor]) -> Tuple[Tensor, Tensor]:
+        """
+        :param state: Tuple[Tensor, Tensor]
+            Tensors of shape (2 * enc_layers, batch_size, enc_units).
+        :return: Tuple[Tensor, Tensor]
+            Tensors of shape (batch_size, dec_units).
+        """
         hidden, cell = state
+        batch_size = hidden.shape[1]
+        hidden = hidden.view(self.enc_layers, 2, -1, self.rnn_units)
+        cell = cell.view(self.enc_layers, 2, -1, self.rnn_units)
 
         # combine and reshape bidirectional states for compatibility with (unidirectional) decoder
-        hidden_combined = torch.cat((hidden[-2, :, :], hidden[-1, :, :]), dim=1)
+        hidden_combined = torch.cat((hidden[-1, 0, :, :], hidden[-1, 1, :, :]), dim=1)
         hidden = torch.tanh(self.fc_hidden(hidden_combined))
 
-        cell_combined = torch.cat((cell[-2, :, :], cell[-1, :, :]), dim=1)
+        cell_combined = torch.cat((cell[-1, 0, :, :], cell[-1, 1, :, :]), dim=1)
         cell = torch.tanh(self.fc_cell(cell_combined))
+
+        assert hidden.shape == (batch_size, self.rnn_units)
+        assert cell.shape == (batch_size, self.rnn_units)
 
         return hidden, cell
