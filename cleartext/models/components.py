@@ -25,7 +25,7 @@ class Encoder(nn.Module):
         Bidirectional LSTM module.
     """
 
-    def __init__(self, embed_weights: Tensor, units: int, enc_layers: int) -> None:
+    def __init__(self, embed_weights: Tensor, units: int, enc_layers: int, dropout: float) -> None:
         """Initialize the encoder.
 
         Constructs encoder sub-modules and initializes their weights using `utils.init_weights`.
@@ -42,7 +42,8 @@ class Encoder(nn.Module):
         self.embed_dim = embed_weights.shape[1]
 
         self.embedding = nn.Embedding.from_pretrained(embed_weights)
-        self.lstm = nn.LSTM(self.embed_dim, units, num_layers=enc_layers, bidirectional=True)
+        self.dropout = nn.Dropout(dropout)
+        self.lstm = nn.LSTM(self.embed_dim, units, num_layers=enc_layers, dropout=dropout, bidirectional=True)
 
         utils.init_weights_(self.lstm)
 
@@ -56,6 +57,7 @@ class Encoder(nn.Module):
             both of shape (2 * enc_layers, batch_size, units).
         """
         embedded = self.embedding(source)
+        embedded = self.dropout(embedded)
         outputs, state = self.lstm(embedded, None)
         hidden, cell = state
 
@@ -78,7 +80,7 @@ class Attention(nn.Module):
     dropout: Module
         Dropout module
     """
-    def __init__(self, enc_units: int, dec_units: int, attn_units: int, dropout: float = 0) -> None:
+    def __init__(self, enc_units: int, dec_units: int, attn_units: int, dropout: float = 0.2) -> None:
         """Initializes the attention module.
 
         :param enc_units: int
@@ -117,7 +119,7 @@ class Attention(nn.Module):
         enc_outputs = enc_outputs.permute(1, 0, 2)
         combined = torch.cat((dec_state, enc_outputs), dim=2)
         combined = self.dropout(combined)
-        scores = torch.tanh(self.fc1(combined))                                          # (len, batch, units)
+        scores = torch.tanh(self.fc1(combined))
         scores = self.fc2(scores).squeeze(-1)
 
         weights = softmax(scores, dim=1)
@@ -160,7 +162,7 @@ class Decoder(nn.Module):
         self.vocab_size, embed_dim = embed_weights.shape
 
         self.embedding = nn.Embedding.from_pretrained(embed_weights)
-        self.lstm = nn.LSTM((enc_units * 2) + embed_dim, dec_units)
+        self.lstm = nn.LSTM((enc_units * 2) + embed_dim, dec_units, dropout=dropout)
         self.fc = nn.Linear(dec_units + 2 * enc_units + embed_dim, self.vocab_size)
         self.dropout = nn.Dropout(dropout)
 
@@ -185,6 +187,7 @@ class Decoder(nn.Module):
         """
         token = token.unsqueeze(0)
         embedded = self.embedding(token)
+        embedded = self.dropout(embedded)
 
         rnn_input = torch.cat((embedded, context), dim=2)
         output, (dec_hidden, dec_cell) = self.lstm(rnn_input, (dec_hidden.unsqueeze(0), dec_cell.unsqueeze(0)))

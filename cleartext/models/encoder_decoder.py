@@ -56,9 +56,9 @@ class EncoderDecoder(nn.Module):
         self.enc_layers = enc_layers
         self.rnn_units = rnn_units
 
-        self.encoder = Encoder(embed_weights_src, rnn_units, enc_layers)
+        self.encoder = Encoder(embed_weights_src, rnn_units, enc_layers, dropout)
         self.decoder = Decoder(embed_weights_trg, rnn_units, rnn_units, dropout)
-        self.attention = Attention(rnn_units, rnn_units, attn_units)
+        self.attention = Attention(rnn_units, rnn_units, attn_units, dropout)
 
         self.fc_hidden = nn.Linear(2 * rnn_units, rnn_units)
         self.fc_cell = nn.Linear(2 * rnn_units, rnn_units)
