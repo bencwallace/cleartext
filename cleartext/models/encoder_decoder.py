@@ -33,7 +33,7 @@ class EncoderDecoder(nn.Module):
     def __init__(self, device: torch.device,
                  embed_weights_src: Tensor, embed_weights_trg: Tensor,
                  rnn_units: int, attn_units: int,
-                 enc_layers: int,
+                 num_layers: int,
                  dropout: float) -> None:
         """Initialize model.
 
@@ -45,7 +45,7 @@ class EncoderDecoder(nn.Module):
             Number of hidden units in all sub-module RNNs.
         :param attn_units: int
             Number of hidden units in attention layer.
-        :param enc_layers: int
+        :param num_layers: int
             Number of encoder layers.
         :param dropout: float
             Dropout probability.
@@ -53,11 +53,11 @@ class EncoderDecoder(nn.Module):
         super().__init__()
         self.device = device
         self.trg_vocab_size = embed_weights_trg.shape[0]
-        self.enc_layers = enc_layers
+        self.num_layers = num_layers
         self.rnn_units = rnn_units
 
-        self.encoder = Encoder(embed_weights_src, rnn_units, enc_layers, dropout)
-        self.decoder = Decoder(embed_weights_trg, rnn_units, rnn_units, dropout)
+        self.encoder = Encoder(embed_weights_src, rnn_units, num_layers, dropout)
+        self.decoder = Decoder(embed_weights_trg, rnn_units, rnn_units, num_layers, dropout)
         self.attention = Attention(rnn_units, rnn_units, attn_units, dropout)
 
         self.fc_hidden = nn.Linear(2 * rnn_units, rnn_units)
@@ -121,7 +121,7 @@ class EncoderDecoder(nn.Module):
         # initialize distribution over first word
         context = self._compute_context(hidden, enc_outputs)
         token = torch.tensor([trg_sos], dtype=torch.long, device=self.device)
-        out, (hidden, cell) = self.decoder(token, context, hidden, cell)        # (1, vocab_size), (1, dec_units)
+        out, (hidden, cell) = self.decoder(token, context, hidden, cell)        # (1, vocab), (layers, 1, dec_units)
 
         # compute log-likelihood scores
         probs = softmax(out, dim=1)
@@ -130,8 +130,8 @@ class EncoderDecoder(nn.Module):
         # initialize scores, sequences, and states
         scores, sequences = torch.topk(scores, beam_size, dim=1)                # (1, beam_size), (seq_len=1, beam_size)
         scores = scores.squeeze(0)                                              # (beam_size,)
-        hidden_states = hidden.unsqueeze(0).repeat(beam_size, 1, 1)             # (beam_size, 1, dec_units)
-        cell_states = cell.unsqueeze(0).repeat(beam_size, 1, 1)
+        hidden_states = hidden.unsqueeze(0).repeat(beam_size, 1, 1, 1)             # (beam_size, 1, dec_units)
+        cell_states = cell.unsqueeze(0).repeat(beam_size, 1, 1, 1)
 
         # main loop over time steps
         for _ in range(1, max_len):
@@ -180,13 +180,13 @@ class EncoderDecoder(nn.Module):
         """Computes a context vector using the attention module.
 
         :param dec_state: Tensor
-            Decoder state of shape (batch_size, dec_units).
+            Decoder state of shape (num_layers, batch_size, dec_units).
         :param enc_outputs: Tensor
             Encoder outputs of shape (seq_len, batch_size, 2 * enc_units).
         :return:
             Context vector of shape (1, batch_size, 2 * enc_units).
         """
-        weights = self.attention(dec_state, enc_outputs).unsqueeze(1)
+        weights = self.attention(dec_state[-1], enc_outputs).unsqueeze(1)
         enc_outputs = enc_outputs.permute(1, 0, 2)
         context = torch.bmm(weights, enc_outputs).permute(1, 0, 2)
         return context
@@ -194,23 +194,19 @@ class EncoderDecoder(nn.Module):
     def _reduce(self, state: Tuple[Tensor, Tensor]) -> Tuple[Tensor, Tensor]:
         """
         :param state: Tuple[Tensor, Tensor]
-            Tensors of shape (2 * enc_layers, batch_size, enc_units).
+            Final encoder hidden/cell states of shape (2 * num_layers, batch_size, enc_units).
         :return: Tuple[Tensor, Tensor]
-            Tensors of shape (batch_size, dec_units).
+            Initial decoder hidden/cell states of shape (num_layers, batch_size, dec_units).
         """
         hidden, cell = state
-        batch_size = hidden.shape[1]
-        hidden = hidden.view(self.enc_layers, 2, -1, self.rnn_units)
-        cell = cell.view(self.enc_layers, 2, -1, self.rnn_units)
+        hidden = hidden.view(self.num_layers, 2, -1, self.rnn_units)
+        cell = cell.view(self.num_layers, 2, -1, self.rnn_units)
 
         # combine and reshape bidirectional states for compatibility with (unidirectional) decoder
-        hidden_combined = torch.cat((hidden[-1, 0, :, :], hidden[-1, 1, :, :]), dim=1)
+        hidden_combined = torch.cat((hidden[:, 0, :, :], hidden[:, 1, :, :]), dim=2)
         hidden = torch.tanh(self.fc_hidden(hidden_combined))
 
-        cell_combined = torch.cat((cell[-1, 0, :, :], cell[-1, 1, :, :]), dim=1)
+        cell_combined = torch.cat((cell[:, 0, :, :], cell[:, 1, :, :]), dim=2)
         cell = torch.tanh(self.fc_cell(cell_combined))
-
-        assert hidden.shape == (batch_size, self.rnn_units)
-        assert cell.shape == (batch_size, self.rnn_units)
 
         return hidden, cell

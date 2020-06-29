@@ -194,6 +194,8 @@ class Pipeline(object):
         :return: Tuple[int, int]
             Number of trainable parameters and total number of model parameters, respectively.
         """
+        warnings.filterwarnings('ignore', category=UserWarning, lineno=50)
+
         self.rnn_units = rnn_units
         self.attn_units = attn_units
         self.dropout = dropout

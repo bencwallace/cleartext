@@ -106,7 +106,7 @@ class Attention(nn.Module):
         """Computes (Bahdanau) attention weights.
 
         :param dec_state: Tensor
-            Previous or initial decoder state of shape (batch_size, dec_units).
+            Previous decoder state (from top layer) of shape (batch_size, dec_units).
         :param enc_outputs: Tensor
             Encoder outputs of shape (source_len, batch_size, 2 * enc_units).
         :return:
@@ -146,7 +146,7 @@ class Decoder(nn.Module):
     dropout: Module
         Dropout module.
     """
-    def __init__(self, embed_weights: Tensor, dec_units: int, enc_units: int, dropout: float) -> None:
+    def __init__(self, embed_weights: Tensor, dec_units: int, enc_units: int, num_layers: int, dropout: float) -> None:
         """Initializes the decoder module.
 
         :param embed_weights: Tensor
@@ -155,6 +155,8 @@ class Decoder(nn.Module):
             Number of hidden units in LSTM decoder.
         :param enc_units: int
             Number of hidden units in LSTM encoder.
+        :param num_layers: int
+            Number of LSTM layers.
         :param dropout: float
             Dropout probability.
         """
@@ -162,7 +164,7 @@ class Decoder(nn.Module):
         self.vocab_size, embed_dim = embed_weights.shape
 
         self.embedding = nn.Embedding.from_pretrained(embed_weights)
-        self.lstm = nn.LSTM((enc_units * 2) + embed_dim, dec_units, dropout=dropout)
+        self.lstm = nn.LSTM((enc_units * 2) + embed_dim, dec_units, num_layers=num_layers, dropout=dropout)
         self.fc = nn.Linear(dec_units + 2 * enc_units + embed_dim, self.vocab_size)
         self.dropout = nn.Dropout(dropout)
 
@@ -178,19 +180,19 @@ class Decoder(nn.Module):
         :param context:
             Context vector of shape (1, batch_size, 2 * enc_units).
         :param dec_hidden:
-            Decoder hidden state of shape (batch_size, dec_units).
+            Decoder hidden state of shape (num_layers, batch_size, dec_units).
         :param dec_cell:
-            Decoder cell state of shape (batch_size, dec_units).
+            Decoder cell state of shape (num_layers, batch_size, dec_units).
         :return: Tuple[Tensor, Tensor]
             Vocabulary scores of shape (batch_size, vocab_size) and tuple containing decoder hidden and cell states,
-            respectively, both of shape (batch_size, dec_units).
+            respectively, both of shape (num_layers, batch_size, dec_units).
         """
         token = token.unsqueeze(0)
         embedded = self.embedding(token)
         embedded = self.dropout(embedded)
 
         rnn_input = torch.cat((embedded, context), dim=2)
-        output, (dec_hidden, dec_cell) = self.lstm(rnn_input, (dec_hidden.unsqueeze(0), dec_cell.unsqueeze(0)))
+        output, (dec_hidden, dec_cell) = self.lstm(rnn_input, (dec_hidden, dec_cell))
 
         embedded = embedded.squeeze(0)
         output = output.squeeze(0)
@@ -202,6 +204,4 @@ class Decoder(nn.Module):
         output = self.fc(combined)
 
         # return logits (rather than softmax activations) for compatibility with cross-entropy loss
-        dec_hidden = dec_hidden.squeeze(0)
-        dec_cell = dec_cell.squeeze(0)
         return output, (dec_hidden, dec_cell)
