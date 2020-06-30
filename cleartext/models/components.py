@@ -130,7 +130,6 @@ class Attention(nn.Module):
         combined = self.dropout(combined)
         scores = torch.tanh(self.fc(combined))                                          # (len, batch, units)
         scores = self.fc2(scores).squeeze(-1)
-        # scores = torch.sum(scores, dim=2)
 
         weights = softmax(scores, dim=1)
         return weights
