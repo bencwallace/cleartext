@@ -70,11 +70,11 @@ class EncoderDecoder(nn.Module):
 
         outputs = torch.zeros(max_len, batch_size, self.trg_vocab_size, device=self.device)
         out = target[0, :]
+        teacher_force = torch.bernoulli(torch.tensor(teacher_forcing, dtype=torch.float)).item()
         for t in range(1, max_len):
             context = self._compute_context(state, enc_outputs)
             out, state = self.decoder(out, state, context)
             outputs[t] = out
-            teacher_force = torch.bernoulli(torch.tensor(teacher_forcing, dtype=torch.float)).item()
             out = (target[t] if teacher_force else out.max(1)[1])
 
         return outputs
