@@ -57,7 +57,7 @@ class EncoderDecoder(nn.Module):
 
         :param source: Tensor
             Source sequence of shape (src_len, batch_size).
-        :param target:
+        :param target: Tensor
             Target sequence of shape (trg_len, batch_size).
         :param teacher_forcing: float
             Teacher forcing probability.
