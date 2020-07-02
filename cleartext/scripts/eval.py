@@ -34,8 +34,8 @@ def main(name: str, dataset: str, beam_size: int, max_len: str, alpha: float, ba
 
     # load data (only validation and test sets)
     print(f'Loading {dataset.__name__} data')
-    _, eval_len, test_len = pipeline.load_data(dataset, 1000)
-    print(f'Loaded {eval_len} evaluation examples and {test_len} test examples')
+    _, _, test_len = pipeline.load_data(dataset, 1000)
+    print(f'Loaded {test_len} test examples')
     pipeline.prepare_data(batch_size)
     print()
 

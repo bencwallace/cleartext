@@ -280,14 +280,8 @@ class Pipeline(object):
         sources, targets = zip(*((e.src, e.trg) for e in self.test_data))
         outputs = [self.beam_search(s, beam_size, max_len, alpha) for s in sources]
 
-        # Compute average (test) BLEU score
-        bleu = 0
-        for target, output in zip(targets, outputs):
-            # kill whitespace tokens, which crash BLEU score for some reason
-            target = ' '.join(target).split()
-            output = ' '.join(output).split()
-            bleu += bleu_score([target], [[output]])
-        bleu /= len(targets)
+        # Compute (test) BLEU score
+        bleu = bleu_score(targets, outputs)
 
         return train_loss, valid_loss, test_loss, bleu
 
