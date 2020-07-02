@@ -283,7 +283,7 @@ class Pipeline(object):
         # Compute (test) BLEU score
         outputs = [' '.join(output).split() for output in outputs]
         targets = [[' '.join(target).split()] for target in targets]
-        bleu = bleu_score(outputs, [[target] for target in targets])
+        bleu = bleu_score(outputs, targets)
 
         return train_loss, valid_loss, test_loss, bleu
 
