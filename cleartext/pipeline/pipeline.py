@@ -201,8 +201,7 @@ class Pipeline(object):
         self.model = EncoderDecoder(self.device, self.src.vocab.vectors, self.trg.vocab.vectors,
                                     rnn_units, attn_units, dropout).to(self.device)
 
-        self.optimizer = optim.Adam(self.model.parameters())
-        # self.optimizer = optim.SGD(self.model.parameters(), lr=0.1, momentum=0.9)
+        self.optimizer = optim.SGD(self.model.parameters(), lr=0.1, momentum=0.9)
         self.criterion = nn.CrossEntropyLoss(ignore_index=self.trg.vocab.stoi[self.PAD_TOKEN])
 
         return utils.count_parameters(self.model)
