@@ -281,9 +281,7 @@ class Pipeline(object):
         outputs = [self.beam_search(s, beam_size, max_len, alpha) for s in sources]
 
         # Compute (test) BLEU score
-        targets = [' '.join(target).split() for target in targets]
-        outputs = [' '.join(output).split() for output in outputs]
-        bleu = bleu_score(targets, outputs)
+        bleu = bleu_score(outputs, [[target] for target in targets])
 
         return train_loss, valid_loss, test_loss, bleu
 
