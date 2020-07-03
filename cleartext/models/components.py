@@ -48,7 +48,9 @@ class Encoder(nn.Module):
 
         self.embedding = nn.Embedding.from_pretrained(embed_weights)
         self.gru = nn.GRU(self.embed_dim, units, bidirectional=True)
-        self.fc = nn.Linear(units * 2, units)
+        self.ln = nn.LayerNorm(2 * units)
+
+        self.fc = nn.Linear(2 * units, units)
         self.dropout = nn.Dropout(dropout)
 
         utils.init_weights_(self.gru)
@@ -60,10 +62,11 @@ class Encoder(nn.Module):
         :param source: Tensor
             Source sequence of shape (seq_len, batch_size)
         :return: Tuple[Tensor, Tensor]
-            Outputs of shape (seq_len, batch_size, units) and state of shape (batch_size, units)
+            Outputs of shape (seq_len, batch_size, 2 * units) and state of shape (batch_size, units)
         """
         embedded = self.embedding(source)
         outputs, state = self.gru(embedded)
+        outputs = self.ln(outputs)
 
         # combine and reshape bidirectional states for compatibility with (unidirectional) decoder
         combined = torch.cat((state[-2, :, :], state[-1, :, :]), dim=1)
