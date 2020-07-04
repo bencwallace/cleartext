@@ -48,7 +48,6 @@ class Encoder(nn.Module):
 
         self.embedding = nn.Embedding.from_pretrained(embed_weights)
         self.gru = nn.GRU(self.embed_dim, units, bidirectional=True)
-        self.ln = nn.LayerNorm(2 * units)
 
         self.fc = nn.Linear(2 * units, units)
         self.dropout = nn.Dropout(dropout)
@@ -65,12 +64,13 @@ class Encoder(nn.Module):
             Outputs of shape (seq_len, batch_size, 2 * units) and state of shape (batch_size, units)
         """
         embedded = self.embedding(source)
+        embedded = self.dropout(embedded)
+
         outputs, state = self.gru(embedded)
-        outputs = self.ln(outputs)
+        outputs = self.dropout(outputs)
 
         # combine and reshape bidirectional states for compatibility with (unidirectional) decoder
         combined = torch.cat((state[-2, :, :], state[-1, :, :]), dim=1)
-        combined = self.dropout(combined)
         state = torch.tanh(self.fc(combined))
 
         return outputs, state
@@ -92,7 +92,7 @@ class Attention(nn.Module):
     dropout: Module
         Dropout module
     """
-    def __init__(self, enc_units: int, dec_units: int, units: int, dropout: float = 0) -> None:
+    def __init__(self, enc_units: int, dec_units: int, units: int) -> None:
         """Initializes the attention module.
 
         :param enc_units: int
@@ -101,15 +101,12 @@ class Attention(nn.Module):
             Decoder state dimensionality.
         :param units: int
             Attention dimensionality.
-        :param dropout: float
-            Dropout probability.
         """
         super().__init__()
         self.attn_in = 2 * enc_units + dec_units
 
         self.fc = nn.Linear(self.attn_in, units)
         self.fc2 = nn.Linear(units, 1)
-        self.dropout = nn.Dropout(dropout)
 
         utils.init_weights_(self.fc)
         utils.init_weights_(self.fc2)
@@ -129,8 +126,8 @@ class Attention(nn.Module):
         # vectorize computation of Bahdanau attention scores for all encoder outputs
         dec_state = dec_state.unsqueeze(1).repeat(1, source_len, 1)
         enc_outputs = enc_outputs.permute(1, 0, 2)
+
         combined = torch.cat((dec_state, enc_outputs), dim=2)
-        combined = self.dropout(combined)
         scores = torch.tanh(self.fc(combined))                                          # (len, batch, units)
         scores = self.fc2(scores).squeeze(-1)
 
@@ -193,6 +190,7 @@ class Decoder(nn.Module):
         """
         token = token.unsqueeze(0)
         embedded = self.embedding(token)
+        embedded = self.dropout(embedded)
 
         rnn_input = torch.cat((embedded, context), dim=2)
         output, dec_state = self.rnn(rnn_input, dec_state.unsqueeze(0))
@@ -201,10 +199,14 @@ class Decoder(nn.Module):
         output = output.squeeze(0)
         context = context.squeeze(0)
 
+        # dropout already applied to embedded
+        output = self.dropout(output)
+        context = self.dropout(context)
+
         # compute output using gru output, context vector, and embedding of previous output
         combined = torch.cat((output, context, embedded), dim=1)
-        combined = self.dropout(combined)
         output = self.fc(combined)
+        output = self.dropout(output)
 
         # return logits (rather than softmax activations) for compatibility with cross-entropy loss
         dec_state = dec_state.squeeze(0)
