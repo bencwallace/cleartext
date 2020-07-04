@@ -172,6 +172,7 @@ class Decoder(nn.Module):
         self.rnn = nn.GRU((units * 2) + embed_dim, units)
         self.fc = nn.Linear(units + 2 * enc_units + embed_dim, self.vocab_size)
         self.dropout = nn.Dropout(dropout)
+        self.ln = nn.LayerNorm(units)
 
         utils.init_weights_(self.rnn)
         utils.init_weights_(self.fc)
@@ -210,4 +211,5 @@ class Decoder(nn.Module):
 
         # return logits (rather than softmax activations) for compatibility with cross-entropy loss
         dec_state = dec_state.squeeze(0)
+        dec_state = self.ln(dec_state)
         return output, dec_state
