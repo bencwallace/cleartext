@@ -89,6 +89,24 @@ For a list of available options, run
 mlflow run -e help https://github.com/bencwallace/cleartext
 ```
 
+## Repository Structure
+
+This repository is divided into the following directories:
+
+* chrome: Source for the ClearText Chrome extension
+* cleartext: ClearText package
+  * app: Main entrypoint for inference (Flask application).
+  * data: Data loading modules.
+  * models: PyTorch models.
+  * pipeline: End-to-end pipeline (data loading and preprocessing, model training, inference, and evaluation).
+  * scripts: Main entrypoints for training and evaluation.
+  * utils: Miscellaneous utilities.
+* data: Placeholder into which ClearText will save downloaded datasets.
+* models: Placeholder into which ClearText will serialize models.
+* notebooks: Jupyter notebooks for EDA.
+* tests: Unit tests.
+* vectors: Placeholder into which ClearText will save downloaded word vectors.
+
 [babbel]: https://www.babbel.com/
 [duolingo]: https://www.duolingo.com/
 [extension]: https://bcwallace.com/cleartext
