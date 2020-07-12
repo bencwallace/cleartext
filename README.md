@@ -2,7 +2,6 @@
 
 # ClearText
 
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/5013aaa1084149feaf34b5bf69b5bc11)](https://app.codacy.com/manual/bencwallace/cleartext?utm_source=github.com&utm_medium=referral&utm_content=bencwallace/cleartext&utm_campaign=Badge_Grade_Dashboard)
 
 Leveraging natural language processing and deep learning technology to help English language learners on the road to
 fluency.
