@@ -8,7 +8,11 @@ fluency.
 
 ## Quick Start
 
-For installation and usage instructions, refer to the [official ClearText extension page][extension].
+For installation and usage instructions, refer to the [~~official ClearText extension page~~][extension].
+
+**Update 2021.02** I've unpublished the ClearText extension from the Chrome web sore. Below is a screenshot for posterity.
+
+![](cleartext.jpg)
 
 ## What problem does ClearText address?
 
